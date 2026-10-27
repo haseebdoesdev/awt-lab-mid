@@ -143,6 +143,12 @@ link is printed to the server log instead (`docker compose logs server`), which 
 
 ### Running it on the web
 
+The project is live at **https://pulse-chat-bay.vercel.app** (app on Vercel, API on AWS EC2, data in
+MongoDB Atlas). See [`deploy/aws/README.md`](deploy/aws/README.md) for how that deployment is set up and
+maintained.
+
+To self-host on a single server instead:
+
 The same Docker setup runs on any server or VPS with Docker installed (e.g. DigitalOcean, AWS Lightsail,
 Azure, a university server):
 
