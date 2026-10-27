@@ -1,0 +1,165 @@
+import type { AddressInfo } from 'node:net';
+import { type Socket, io as connect } from 'socket.io-client';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { createServer } from '../src/server.js';
+import type { ClientToServerEvents, ServerToClientEvents } from '../src/socket/events.js';
+import { createRoom, signUp } from './helpers.js';
+
+type ClientSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
+
+const { app, httpServer, io } = createServer();
+let url = '';
+const sockets: ClientSocket[] = [];
+
+beforeAll(async () => {
+  await new Promise<void>((resolve) => httpServer.listen(0, resolve));
+  url = `http://localhost:${(httpServer.address() as AddressInfo).port}`;
+});
+
+afterEach(() => {
+  for (const socket of sockets.splice(0)) socket.disconnect();
+});
+
+afterAll(async () => {
+  await io.close();
+});
+
+function open(accessToken?: string): ClientSocket {
+  const socket: ClientSocket = connect(url, {
+    transports: ['websocket'],
+    forceNew: true,
+    extraHeaders: accessToken ? { cookie: `access_token=${accessToken}` } : {},
+  });
+  sockets.push(socket);
+  return socket;
+}
+
+function waitForConnect(socket: ClientSocket) {
+  return new Promise<void>((resolve, reject) => {
+    socket.once('connect', resolve);
+    socket.once('connect_error', reject);
+  });
+}
+
+/** Signs a user up and connects an authenticated socket for them. */
+async function connectAs(username: string) {
+  const session = await signUp(app, username);
+  const socket = open(session.cookies.access_token);
+  await waitForConnect(socket);
+  return { ...session, socket };
+}
+
+type Payload<E extends keyof ServerToClientEvents> = Parameters<ServerToClientEvents[E]>[0];
+
+/** Resolves with the next `event` whose payload matches `filter`. */
+function next<E extends keyof ServerToClientEvents>(
+  socket: ClientSocket,
+  event: E,
+  filter: (payload: Payload<E>) => boolean = () => true,
+) {
+  return new Promise<Payload<E>>((resolve) => {
+    const handler = ((payload: Payload<E>) => {
+      if (!filter(payload)) return;
+      socket.off(event, handler);
+      resolve(payload);
+    }) as never;
+    socket.on(event, handler);
+  });
+}
+
+describe('Socket.IO', () => {
+  it('rejects connections without a valid access token', async () => {
+    const error = await new Promise<Error>((resolve) => open('garbage').once('connect_error', resolve));
+    expect(error.message).toBe('unauthorized');
+  });
+
+  it('delivers messages in real time and acknowledges the sender', async () => {
+    const room = await createRoom('general');
+    const alice = await connectAs('alice');
+    const bob = await connectAs('bob');
+
+    const received = next(bob.socket, 'message:new');
+    const ack = await alice.socket.emitWithAck('message:send', { conversationId: room, body: '  hello bob  ' });
+
+    expect(ack).toMatchObject({ ok: true, data: { body: 'hello bob', sender: { username: 'alice' } } });
+    expect(await received).toMatchObject({ conversationId: room, body: 'hello bob' });
+  });
+
+  it('acknowledges invalid messages with an error', async () => {
+    const room = await createRoom('general');
+    const alice = await connectAs('alice');
+    expect(await alice.socket.emitWithAck('message:send', { conversationId: room, body: '' })).toEqual({
+      ok: false,
+      error: 'Message cannot be empty',
+    });
+    expect(
+      await alice.socket.emitWithAck('message:send', { conversationId: '64b000000000000000000000', body: 'hi' }),
+    ).toEqual({ ok: false, error: 'Conversation not found' });
+  });
+
+  it('broadcasts typing indicators to everyone but the typist', async () => {
+    const room = await createRoom('general');
+    const alice = await connectAs('alice');
+    const bob = await connectAs('bob');
+
+    let aliceSawOwnTyping = false;
+    alice.socket.on('typing', () => (aliceSawOwnTyping = true));
+
+    const typing = next(bob.socket, 'typing');
+    alice.socket.emit('typing', { conversationId: room, isTyping: true });
+    expect(await typing).toMatchObject({ conversationId: room, isTyping: true, user: { username: 'alice' } });
+    expect(aliceSawOwnTyping).toBe(false);
+  });
+
+  it('announces presence changes', async () => {
+    const alice = await connectAs('alice');
+    const bob = await signUp(app, 'bob');
+    const isBob = (p: { userId: string }) => p.userId === bob.user.id;
+
+    const online = next(alice.socket, 'presence', isBob);
+    const bobSocket = open(bob.cookies.access_token);
+    await waitForConnect(bobSocket);
+    expect(await online).toEqual({ userId: bob.user.id, online: true, lastSeen: null });
+
+    const offline = next(alice.socket, 'presence', isBob);
+    bobSocket.disconnect();
+    expect(await offline).toMatchObject({ userId: bob.user.id, online: false });
+  });
+
+  it('pushes read receipts to the conversation', async () => {
+    const room = await createRoom('general');
+    const alice = await connectAs('alice');
+    const bob = await connectAs('bob');
+
+    const receipt = next(alice.socket, 'read:update');
+    const ack = await bob.socket.emitWithAck('conversation:read', { conversationId: room });
+    expect(ack.ok).toBe(true);
+    expect(await receipt).toMatchObject({ conversationId: room, userId: bob.user.id, username: 'bob' });
+  });
+
+  it('subscribes both participants to a newly created DM', async () => {
+    const alice = await connectAs('alice');
+    const bob = await connectAs('bob');
+
+    const announced = next(bob.socket, 'conversation:new');
+    const res = await alice.agent.post('/api/conversations/dm').send({ userId: bob.user.id }).expect(201);
+    const dmId = res.body.conversation.id;
+    expect((await announced).id).toBe(dmId);
+
+    const received = next(bob.socket, 'message:new');
+    await alice.socket.emitWithAck('message:send', { conversationId: dmId, body: 'psst' });
+    expect(await received).toMatchObject({ conversationId: dmId, body: 'psst' });
+  });
+
+  it('disconnects banned users and tells them why', async () => {
+    const admin = await signUp(app, 'root', { admin: true });
+    const bob = await connectAs('bob');
+
+    const revoked = next(bob.socket, 'session:revoked');
+    const disconnected = new Promise<string>((resolve) => bob.socket.once('disconnect', resolve));
+    await admin.agent.patch(`/api/admin/users/${bob.user.id}`).send({ isBanned: true }).expect(200);
+
+    expect((await revoked).reason).toMatch(/banned/);
+    expect(await disconnected).toBe('io server disconnect');
+  });
+});
