@@ -77,6 +77,7 @@ export const api = {
     register: (input: { username: string; email: string; password: string }) =>
       request<{ user: Account }>('/auth/register', { method: 'POST', body: input }),
     logout: () => request<void>('/auth/logout', { method: 'POST' }),
+    socketToken: () => request<{ token: string }>('/auth/socket-token'),
     forgotPassword: (email: string) =>
       request<{ message: string }>('/auth/forgot-password', { method: 'POST', body: { email } }),
     resetPassword: (token: string, password: string) =>
