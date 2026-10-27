@@ -15,6 +15,7 @@ import {
   revokeSession,
   rotateSession,
   setAuthCookies,
+  signAccessToken,
 } from '../services/tokens.js';
 import { conflict, forbidden, unauthorized } from '../utils/httpError.js';
 
@@ -132,6 +133,15 @@ router.post('/reset-password', authLimiter, async (req, res) => {
   await resetPassword(token, password);
   clearAuthCookies(res);
   res.json({ message: 'Your password has been changed. You can now sign in.' });
+});
+
+/**
+ * Short-lived token for the Socket.IO handshake. Needed when the socket server
+ * lives on another domain than the web app (e.g. Vercel + Render), where the
+ * browser won't send the httpOnly cookie. It only has to survive the handshake.
+ */
+router.get('/socket-token', requireAuth, (req, res) => {
+  res.json({ token: signAccessToken(currentUser(req), 60) });
 });
 
 router.get('/me', requireAuth, async (req, res) => {

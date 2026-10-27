@@ -73,6 +73,15 @@ describe('Socket.IO', () => {
     expect(error.message).toBe('unauthorized');
   });
 
+  it('accepts a short-lived socket token instead of the cookie (cross-domain hosting)', async () => {
+    const { agent } = await signUp(app, 'alice');
+    const { body } = await agent.get('/api/auth/socket-token').expect(200);
+    const socket: ClientSocket = connect(url, { transports: ['websocket'], forceNew: true, auth: { token: body.token } });
+    sockets.push(socket);
+    await waitForConnect(socket);
+    expect(socket.connected).toBe(true);
+  });
+
   it('delivers messages in real time and acknowledges the sender', async () => {
     const room = await createRoom('general');
     const alice = await connectAs('alice');

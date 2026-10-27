@@ -16,10 +16,10 @@ const ROTATION_GRACE_MS = 30_000;
 
 /* ----------------------------- Access tokens ----------------------------- */
 
-export function signAccessToken(user: AuthUser): string {
+export function signAccessToken(user: AuthUser, ttlSeconds = env.ACCESS_TOKEN_TTL_SECONDS): string {
   return jwt.sign({ username: user.username, role: user.role }, env.JWT_ACCESS_SECRET, {
     subject: user.id,
-    expiresIn: env.ACCESS_TOKEN_TTL_SECONDS,
+    expiresIn: ttlSeconds,
     algorithm: 'HS256',
   });
 }
