@@ -6,6 +6,7 @@ import { currentUser, requireAuth } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimit.js';
 import { User, type UserDoc, usernameCollation } from '../models/User.js';
 import { toAccount, toAuthUser } from '../services/mappers.js';
+import { requestPasswordReset, resetPassword } from '../services/passwordReset.js';
 import {
   REFRESH_COOKIE,
   clearAuthCookies,
@@ -19,6 +20,8 @@ import { conflict, forbidden, unauthorized } from '../utils/httpError.js';
 
 const router = Router();
 
+const passwordSchema = z.string().min(8, 'Password must be at least 8 characters').max(128);
+
 const registerSchema = z.object({
   username: z
     .string()
@@ -27,7 +30,16 @@ const registerSchema = z.object({
     .max(30, 'Username must be at most 30 characters')
     .regex(/^[a-zA-Z0-9_.-]+$/, 'Username may only contain letters, numbers, ".", "_" and "-"'),
   email: z.string().trim().toLowerCase().pipe(z.email('Enter a valid email address')),
-  password: z.string().min(8, 'Password must be at least 8 characters').max(128),
+  password: passwordSchema,
+});
+
+const forgotSchema = z.object({
+  email: z.string().trim().toLowerCase().pipe(z.email('Enter a valid email address')),
+});
+
+const resetSchema = z.object({
+  token: z.string().min(1, 'Missing reset token'),
+  password: passwordSchema,
 });
 
 const loginSchema = z.object({
@@ -106,6 +118,20 @@ router.post('/logout', async (req, res) => {
   if (token) await revokeSession(token);
   clearAuthCookies(res);
   res.status(204).end();
+});
+
+router.post('/forgot-password', authLimiter, (req, res) => {
+  const { email } = forgotSchema.parse(req.body);
+  // Not awaited: the response time must not reveal whether the account exists.
+  requestPasswordReset(email).catch((error) => console.error('Password reset email failed:', error));
+  res.json({ message: 'If an account exists for that email, a reset link is on its way.' });
+});
+
+router.post('/reset-password', authLimiter, async (req, res) => {
+  const { token, password } = resetSchema.parse(req.body);
+  await resetPassword(token, password);
+  clearAuthCookies(res);
+  res.json({ message: 'Your password has been changed. You can now sign in.' });
 });
 
 router.get('/me', requireAuth, async (req, res) => {

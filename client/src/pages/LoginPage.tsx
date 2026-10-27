@@ -1,6 +1,6 @@
-import { Alert, Button, Link, Stack, TextField } from '@mui/material';
+import { Alert, Box, Button, Link, Stack, TextField } from '@mui/material';
 import { useActionState, useState } from 'react';
-import { Link as RouterLink } from 'react-router';
+import { Link as RouterLink, useLocation } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { AuthCard } from '../components/AuthCard';
 import { PasswordField } from '../components/PasswordField';
@@ -11,6 +11,8 @@ const toApiError = (error: unknown) =>
 
 export function LoginPage() {
   const { login, notice } = useAuth();
+  // Set by the reset-password page after a successful reset.
+  const success = (useLocation().state as { success?: string } | null)?.success;
   const [values, setValues] = useState({ login: '', password: '' });
 
   // React 19 form action: pending state and errors without manual bookkeeping.
@@ -37,6 +39,7 @@ export function LoginPage() {
       }
     >
       <Stack component="form" action={submit} spacing={2} noValidate>
+        {success && !error && <Alert severity="success">{success}</Alert>}
         {notice && !error && <Alert severity="warning">{notice}</Alert>}
         {error && <Alert severity="error">{error.message}</Alert>}
         <TextField
@@ -58,6 +61,11 @@ export function LoginPage() {
           required
           fullWidth
         />
+        <Box sx={{ textAlign: 'right', mt: '4px !important' }}>
+          <Link component={RouterLink} to="/forgot-password" variant="body2">
+            Forgot password?
+          </Link>
+        </Box>
         <Button
           type="submit"
           variant="contained"

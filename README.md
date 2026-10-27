@@ -30,6 +30,8 @@ role-based administration and a one-command Docker deployment.
 **Accounts and administration**
 - Sign up / sign in with email or username; passwords hashed with bcrypt
 - Short-lived JWT access tokens plus rotating refresh tokens, both in httpOnly cookies
+- Forgot password: a single-use reset link (valid 30 minutes) is emailed over SMTP; resetting signs the
+  account out on every device
 - Two roles: **user** and **admin**
 - Admins can create and delete rooms, remove any message, ban / unban users (which ends their sessions and
   disconnects them instantly), promote other admins and view live statistics
@@ -132,6 +134,23 @@ npm run dev                          # API on :4000, Vite on :5173 (proxies /api
 
 Open **http://localhost:5173**.
 
+### Password-reset emails
+
+Reset links are sent through any SMTP server: set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` and
+`MAIL_FROM` in `.env` (for Gmail: `smtp.gmail.com`, port `587`, and an
+[app password](https://myaccount.google.com/apppasswords)). Without `SMTP_HOST`, nothing is sent and the
+link is printed to the server log instead (`docker compose logs server`), which is enough for local testing.
+
+### Running it on the web
+
+The same Docker setup runs on any server or VPS with Docker installed (e.g. DigitalOcean, AWS Lightsail,
+Azure, a university server):
+
+1. Point a domain at the server and put HTTPS in front of port 8080 (e.g. Caddy, or nginx with Let's Encrypt).
+2. In `.env` set `APP_URL=https://your-domain`, `COOKIE_SECURE=true`, a strong `JWT_ACCESS_SECRET` and
+   `ADMIN_PASSWORD`, plus the SMTP settings so reset emails actually arrive.
+3. Run `docker compose up -d --build`.
+
 ### Useful scripts (from the repository root)
 
 | Command | Description |
@@ -157,6 +176,11 @@ Server environment variables (validated with Zod on startup):
 | `COOKIE_SECURE` | `true` in production | Set the `Secure` flag on cookies (requires HTTPS) |
 | `TRUST_PROXY` | `0` | Number of reverse proxies in front of the API |
 | `ADMIN_USERNAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | – | Admin account created on startup if missing |
+| `APP_URL` | first `CLIENT_ORIGIN` | Public URL of the app, used in password-reset links |
+| `PASSWORD_RESET_TTL_MINUTES` | `30` | How long a reset link stays valid |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | – / `587` | Outgoing mail server. Without `SMTP_HOST`, reset emails are printed to the server log |
+| `SMTP_SECURE` | `true` on port 465 | Use TLS from the start of the connection |
+| `MAIL_FROM` | `Pulse Chat <no-reply@pulse.local>` | Sender of outgoing email |
 
 ## REST API
 
@@ -169,6 +193,8 @@ All routes are under `/api`. Errors use the shape `{ "error": string, "details"?
 | POST | `/auth/refresh` | refresh cookie | Rotate the refresh token, issue a new access token |
 | POST | `/auth/logout` | public | Revoke the session and clear cookies |
 | GET | `/auth/me` | user | Current account |
+| POST | `/auth/forgot-password` | public | Email a reset link (same response whether or not the account exists) |
+| POST | `/auth/reset-password` | public | Set a new password with `token` from the link; revokes all sessions |
 | GET | `/users?q=` | user | Search people to message (online first) |
 | GET | `/conversations` | user | Rooms and DMs with last message and unread count |
 | POST | `/conversations/rooms` | admin | Create a room |
@@ -208,11 +234,12 @@ The handshake is authenticated with the access-token cookie. On connect, each so
 npm test
 ```
 
-35 backend tests run against an in-memory MongoDB and cover:
+44 backend tests run against an in-memory MongoDB and cover:
 
 - registration and login validation
 - refresh-token rotation and its grace period
 - logout revocation
+- forgot / reset password: no account enumeration, hashed single-use tokens, expiry, sign-out everywhere
 - room permissions
 - DM privacy and de-duplication
 - cursor pagination
@@ -231,8 +258,8 @@ CI (`.github/workflows/ci.yml`) type-checks, tests and builds both packages on e
 ├── server/
 │   ├── src/
 │   │   ├── config/env.ts       # Zod-validated environment
-│   │   ├── models/             # User, Session, Conversation, Message, ReadState
-│   │   ├── services/           # tokens, conversations, messages, reads, DTO mappers
+│   │   ├── models/             # User, Session, Conversation, Message, ReadState, PasswordReset
+│   │   ├── services/           # tokens, mailer, password reset, conversations, messages, reads
 │   │   ├── routes/             # auth, users, conversations, messages, admin
 │   │   ├── middleware/         # auth/roles, errors, rate limiting
 │   │   ├── socket/             # typed events, handlers, presence, emitter
@@ -245,7 +272,7 @@ CI (`.github/workflows/ci.yml`) type-checks, tests and builds both packages on e
         ├── auth/               # AuthContext (cross-tab sync), route guards
         ├── chat/               # ChatContext (socket lifecycle), reducer
         ├── components/         # Sidebar, MessageList, Composer, dialogs, …
-        ├── pages/              # Login, Register, Chat, Admin (lazy), Error
+        ├── pages/              # Login, Register, Forgot/Reset password, Chat, Admin (lazy), Error
         └── lib/                # API client, socket, formatting, notifications
 ```
 

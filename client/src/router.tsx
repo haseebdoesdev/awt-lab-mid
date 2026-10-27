@@ -5,6 +5,7 @@ import { FullPageLoader } from './components/FullPageLoader';
 import { AppLayout } from './layouts/AppLayout';
 import { ChatPage } from './pages/ChatPage';
 import { ErrorPage } from './pages/ErrorPage';
+import { ForgotPasswordPage, ResetPasswordPage } from './pages/PasswordResetPages';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 
@@ -31,6 +32,16 @@ export const router = createBrowserRouter([
           </GuestOnly>
         ),
       },
+      {
+        path: '/forgot-password',
+        element: (
+          <GuestOnly>
+            <ForgotPasswordPage />
+          </GuestOnly>
+        ),
+      },
+      // Not guest-only: the emailed link must work even in a browser that is signed in.
+      { path: '/reset-password', element: <ResetPasswordPage /> },
       {
         element: (
           <RequireAuth>

@@ -38,7 +38,14 @@ export function refreshSession(): Promise<Account | null> {
 }
 
 // Endpoints where a 401 means "wrong credentials", not "access token expired".
-const NO_REFRESH = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout'];
+const NO_REFRESH = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/logout',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+];
 
 async function request<T>(path: string, init: { method?: string; body?: unknown } = {}, retry = true): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -70,6 +77,10 @@ export const api = {
     register: (input: { username: string; email: string; password: string }) =>
       request<{ user: Account }>('/auth/register', { method: 'POST', body: input }),
     logout: () => request<void>('/auth/logout', { method: 'POST' }),
+    forgotPassword: (email: string) =>
+      request<{ message: string }>('/auth/forgot-password', { method: 'POST', body: { email } }),
+    resetPassword: (token: string, password: string) =>
+      request<{ message: string }>('/auth/reset-password', { method: 'POST', body: { token, password } }),
   },
   users: {
     list: (q?: string) =>

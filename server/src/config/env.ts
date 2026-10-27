@@ -24,6 +24,18 @@ const schema = z.object({
   // Number of reverse proxies in front of the API (nginx in Docker = 1).
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
 
+  // Public URL of the web app, used in emailed links (defaults to the first CLIENT_ORIGIN).
+  APP_URL: z.url().optional(),
+  PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
+
+  // Outgoing email (password resets). Without SMTP_HOST, emails are printed to the server log.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_SECURE: z.stringbool().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  MAIL_FROM: z.string().default('Pulse Chat <no-reply@pulse.local>'),
+
   // Optional bootstrap admin account, created on startup if it does not exist.
   ADMIN_USERNAME: z.string().default('admin'),
   ADMIN_EMAIL: z.email().optional(),
@@ -43,6 +55,7 @@ if (!parsed.success) {
 export const env = {
   ...parsed.data,
   COOKIE_SECURE: parsed.data.COOKIE_SECURE ?? parsed.data.NODE_ENV === 'production',
+  APP_URL: (parsed.data.APP_URL ?? parsed.data.CLIENT_ORIGIN.split(',')[0] ?? '').replace(/\/$/, ''),
 };
 
 export const isTest = env.NODE_ENV === 'test';
