@@ -1,4 +1,5 @@
 import { Schema, model, type HydratedDocument } from 'mongoose';
+import { VISIBILITY_SCOPES, type VisibilityScope } from './Nearby.js';
 
 export const ROLES = ['user', 'admin'] as const;
 export type Role = (typeof ROLES)[number];
@@ -11,6 +12,8 @@ export interface IUser {
   /** Google account id (`sub`) once the user has signed in with Google. */
   googleId: string | null;
   role: Role;
+  /** Set while the user has opted in to the local (Nearby) room. */
+  nearby: { joinedAt: Date; alias: string | null; visibility: VisibilityScope } | null;
   isBanned: boolean;
   lastSeen: Date | null;
   createdAt: Date;
@@ -36,6 +39,17 @@ const userSchema = new Schema<IUser>(
     passwordHash: { type: String, default: null, select: false },
     googleId: { type: String, default: null },
     role: { type: String, enum: ROLES, default: 'user', required: true },
+    nearby: {
+      type: new Schema(
+        {
+          joinedAt: { type: Date, required: true },
+          alias: { type: String, default: null, trim: true, maxlength: 30 },
+          visibility: { type: String, enum: VISIBILITY_SCOPES, default: 'hidden' },
+        },
+        { _id: false },
+      ),
+      default: null,
+    },
     isBanned: { type: Boolean, default: false, required: true },
     lastSeen: { type: Date, default: null },
   },

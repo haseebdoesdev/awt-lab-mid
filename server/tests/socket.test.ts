@@ -182,6 +182,28 @@ describe('Socket.IO', () => {
     expect(await received).toMatchObject({ conversationId: dmId, body: 'psst' });
   });
 
+  it('delivers local (nearby) messages only to people within 1 km', async () => {
+    const at = async (session: Awaited<ReturnType<typeof connectAs>>, lat: number) => {
+      await session.agent.post('/api/nearby/join').send({ consent: true }).expect(200);
+      await session.agent.put('/api/nearby/location').send({ lat, lng: 73.03 }).expect(200);
+    };
+    const alice = await connectAs('alice');
+    const bob = await connectAs('bob');
+    const carol = await connectAs('carol');
+    await at(alice, 33.7);
+    await at(bob, 33.7027); // ~300 m away
+    await at(carol, 33.745); // ~5 km away
+
+    let carolGotIt = false;
+    carol.socket.on('nearby:message', () => (carolGotIt = true));
+    const received = next(bob.socket, 'nearby:message');
+    await alice.agent.post('/api/nearby/messages').send({ body: 'hello neighbours' }).expect(201);
+
+    expect(await received).toMatchObject({ body: 'hello neighbours', senderName: 'alice' });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(carolGotIt).toBe(false);
+  });
+
   it('disconnects banned users and tells them why', async () => {
     const admin = await signUp(app, 'root', { admin: true });
     const bob = await connectAs('bob');

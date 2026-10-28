@@ -37,6 +37,14 @@ export function emitToUser<E extends keyof ServerToClientEvents>(
   io?.to(userRoom(userId)).emit(event, ...args);
 }
 
+export function emitToUsers<E extends keyof ServerToClientEvents>(
+  userIds: string[],
+  event: E,
+  ...args: EventArgs<E>
+): void {
+  if (userIds.length) io?.to(userIds.map(userRoom)).emit(event, ...args);
+}
+
 export function emitToAll<E extends keyof ServerToClientEvents>(event: E, ...args: EventArgs<E>): void {
   io?.emit(event, ...args);
 }

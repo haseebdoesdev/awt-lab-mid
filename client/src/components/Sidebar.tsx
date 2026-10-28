@@ -1,4 +1,5 @@
 import AddIcon from '@mui/icons-material/Add';
+import NearMeIcon from '@mui/icons-material/NearMe';
 import EditSquareIcon from '@mui/icons-material/EditSquare';
 import SearchIcon from '@mui/icons-material/Search';
 import TagIcon from '@mui/icons-material/Tag';
@@ -18,7 +19,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { useCurrentUser } from '../auth/AuthContext';
 import { conversationTitle, useChatState } from '../chat/ChatContext';
 import { sortConversations } from '../chat/chatReducer';
@@ -117,6 +118,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { conversations, loaded } = useChatState();
   const { conversationId } = useParams();
   const navigate = useNavigate();
+  const onNearby = useLocation().pathname.startsWith('/nearby');
   const [filter, setFilter] = useState('');
   const [dialog, setDialog] = useState<'room' | 'dm' | null>(null);
 
@@ -166,6 +168,33 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </Box>
 
       <List component="nav" aria-label="Conversations" sx={{ flex: 1, overflowY: 'auto', pt: 0 }}>
+        <SectionHeader title="Nearby" />
+        <ListItemButton
+          selected={onNearby}
+          onClick={() => {
+            navigate('/nearby');
+            onNavigate?.();
+          }}
+          sx={{ borderRadius: 2, mx: 1, mb: 0.25, py: 0.75 }}
+        >
+          <ListItemAvatar sx={{ minWidth: 48 }}>
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: 2,
+                display: 'grid',
+                placeItems: 'center',
+                bgcolor: 'action.hover',
+                color: 'primary.main',
+              }}
+            >
+              <NearMeIcon fontSize="small" />
+            </Box>
+          </ListItemAvatar>
+          <ListItemText primary="Local chat" secondary="People within 1 km" slotProps={{ primary: { sx: { fontWeight: 500 } } }} />
+        </ListItemButton>
+
         <SectionHeader
           title="Rooms"
           action={

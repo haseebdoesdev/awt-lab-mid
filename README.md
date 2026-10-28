@@ -29,6 +29,16 @@ role-based administration and a one-command Docker deployment.
 - Desktop notifications for messages in background conversations
 - Light / dark / system theme and a responsive layout down to phone size
 
+**Local chat (Nearby)**
+- Chat with everyone within **1 km**, with a live map (Leaflet + OpenStreetMap)
+- Strictly opt-in, with two separate consents: joining the local chat, and appearing on the map
+- Four map visibility scopes: *Hidden* (default), *Approximate* (snapped to a ~500 m grid cell on the
+  server), *Precise for DM contacts only*, *Precise for everyone nearby*. Distances are rounded.
+- Optional alias for the local chat and the map; admins can still see the account behind it for moderation
+- Location is shared only while the page is open, deleted instantly on leaving, and expires 15 minutes
+  after the last update. Local messages delete themselves after 24 hours (MongoDB TTL indexes).
+- Admin-only "demo location": click the map to simulate being somewhere, for presentations
+
 **Accounts and administration**
 - Sign up / sign in with email or username; passwords hashed with bcrypt
 - Short-lived JWT access tokens plus rotating refresh tokens, both in httpOnly cookies
@@ -223,6 +233,14 @@ All routes are under `/api`. Errors use the shape `{ "error": string, "details"?
 | GET | `/admin/stats` | admin | Usage statistics |
 | GET | `/admin/users` | admin | All accounts |
 | PATCH | `/admin/users/:id` | admin | Change `role` and/or `isBanned` |
+| GET | `/nearby/me` | user | Your local-chat status, alias, visibility and position |
+| POST | `/nearby/join` | user | Opt in (`consent: true`, optional `alias`, `visibility`) |
+| PATCH | `/nearby/settings` | member | Change alias / visibility |
+| POST | `/nearby/leave` | member | Opt out; deletes your location immediately |
+| PUT | `/nearby/location` | member | Update position (`lat`, `lng`, `accuracy`; `simulated` for admins) |
+| GET | `/nearby/people` | member | People within 1 km, as their visibility allows |
+| GET / POST | `/nearby/messages` | member | Local messages within 1 km of you (last 24 h) / send one |
+| DELETE | `/nearby/messages/:id` | admin | Remove a local message |
 | GET | `/health` | public | Liveness / database status |
 
 ## Socket.IO events
@@ -245,6 +263,8 @@ The handshake is authenticated with the access-token cookie. On connect, each so
 | server → client | `read:update` | `{ conversationId, userId, username, lastReadAt }` |
 | server → client | `conversation:new` / `conversation:deleted` | `Conversation` / `{ conversationId }` |
 | server → client | `session:revoked` | `{ reason }` (e.g. banned) |
+| server → client | `nearby:message` / `nearby:message-deleted` | Local message within 1 km / `{ id }` |
+| server → client | `nearby:changed` | Someone near you joined, left, moved or changed visibility |
 
 ## Testing
 
@@ -252,7 +272,7 @@ The handshake is authenticated with the access-token cookie. On connect, each so
 npm test
 ```
 
-65 backend tests run against an in-memory MongoDB and cover:
+83 backend tests run against an in-memory MongoDB and cover:
 
 - registration and login validation
 - refresh-token rotation and its grace period
@@ -265,6 +285,8 @@ npm test
 - unread counts and read receipts
 - replies, editing permissions, reaction toggling (and messages stored before those features existed)
 - moderation, bans and role changes
+- local chat: consent, the 1 km boundary, each visibility scope, location blurring, aliases, demo pins,
+  expiry and real-time delivery only to people nearby
 - the real-time layer, through actual Socket.IO clients: message delivery, acknowledgements, typing, presence,
   receipts, DM subscription and forced disconnect on ban
 
@@ -298,6 +320,7 @@ CI (`.github/workflows/ci.yml`) type-checks, tests and builds both packages on e
 
 ## Notes and limitations
 
+- Local chat accuracy depends on the device: indoor GPS is often off by 20–50 m.
 - Presence is kept in memory, so the API runs as a single instance. Scaling out would need the
   Socket.IO Redis adapter and a shared presence store.
 - Over plain HTTP (`localhost`) cookies are sent without the `Secure` flag. Set `COOKIE_SECURE=true` behind HTTPS.

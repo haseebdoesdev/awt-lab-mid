@@ -12,6 +12,7 @@ import adminRouter from './routes/admin.js';
 import authRouter from './routes/auth.js';
 import conversationsRouter from './routes/conversations.js';
 import messagesRouter from './routes/messages.js';
+import nearbyRouter from './routes/nearby.js';
 import usersRouter from './routes/users.js';
 
 export function createApp() {
@@ -34,6 +35,7 @@ export function createApp() {
   app.use('/api/users', requireAuth, usersRouter);
   app.use('/api/conversations', requireAuth, conversationsRouter);
   app.use('/api/messages', requireAuth, messagesRouter);
+  app.use('/api/nearby', requireAuth, nearbyRouter);
   app.use('/api/admin', requireAuth, requireRole('admin'), adminRouter);
 
   app.use('/api', notFoundHandler);

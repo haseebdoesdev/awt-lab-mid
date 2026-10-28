@@ -75,6 +75,40 @@ export interface AdminStats {
   online: number;
 }
 
+/* ------------------------------ Nearby ------------------------------ */
+
+export type VisibilityScope = 'hidden' | 'approximate' | 'contacts' | 'everyone';
+
+export interface NearbyMe {
+  joined: boolean;
+  alias: string | null;
+  visibility: VisibilityScope;
+  displayName: string;
+  selfToken: string;
+  radiusMeters: number;
+  location: { lat: number; lng: number; accuracy: number | null; simulated: boolean; updatedAt: string } | null;
+}
+
+export interface NearbyPerson {
+  token: string;
+  name: string;
+  precision: 'exact' | 'approximate';
+  lat: number;
+  lng: number;
+  radiusMeters: number | null;
+  distanceMeters: number;
+}
+
+export interface NearbyMessage {
+  id: string;
+  senderToken: string;
+  senderName: string;
+  body: string;
+  createdAt: string;
+  /** Only present for admins. */
+  sender?: { id: string; username: string };
+}
+
 /* ------------------------------ Socket.IO ------------------------------ */
 
 export type AckResponse<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -101,6 +135,9 @@ export interface ServerToClientEvents {
   'conversation:new': (conversation: Conversation) => void;
   'conversation:deleted': (payload: { conversationId: string }) => void;
   'session:revoked': (payload: { reason: string }) => void;
+  'nearby:message': (message: NearbyMessage) => void;
+  'nearby:message-deleted': (payload: { id: string }) => void;
+  'nearby:changed': () => void;
 }
 
 export interface ClientToServerEvents {

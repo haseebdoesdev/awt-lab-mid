@@ -1,4 +1,5 @@
 import type { ReactionEmoji } from '../models/Message.js';
+import type { NearbyMessageDTO } from '../services/nearby.js';
 import type { AuthUser, ConversationDTO, MessageDTO, ReadReceiptDTO } from '../types/dto.js';
 
 /**
@@ -31,6 +32,11 @@ export interface ServerToClientEvents {
   'conversation:new': (conversation: ConversationDTO) => void;
   'conversation:deleted': (payload: { conversationId: string }) => void;
   'session:revoked': (payload: { reason: string }) => void;
+  /** Local room: a message sent within 1 km of you. */
+  'nearby:message': (message: NearbyMessageDTO) => void;
+  'nearby:message-deleted': (payload: { id: string }) => void;
+  /** Someone near you joined, left, moved or changed visibility – refresh the map. */
+  'nearby:changed': () => void;
 }
 
 export interface ClientToServerEvents {

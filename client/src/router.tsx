@@ -11,6 +11,8 @@ import { RegisterPage } from './pages/RegisterPage';
 
 // The admin dashboard is code-split: regular users never download it.
 const AdminPage = lazy(() => import('./pages/AdminPage'));
+// Nearby pulls in the map library, so it is code-split too.
+const NearbyPage = lazy(() => import('./pages/NearbyPage'));
 
 export const router = createBrowserRouter([
   {
@@ -51,6 +53,14 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <ChatPage /> },
           { path: 'c/:conversationId', element: <ChatPage /> },
+          {
+            path: 'nearby',
+            element: (
+              <Suspense fallback={<FullPageLoader />}>
+                <NearbyPage />
+              </Suspense>
+            ),
+          },
           {
             path: 'admin',
             element: (

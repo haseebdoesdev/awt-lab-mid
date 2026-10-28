@@ -1,4 +1,16 @@
-import type { Account, AdminStats, Conversation, Message, PublicUser, ReadReceipt, Role } from '../types';
+import type {
+  Account,
+  AdminStats,
+  Conversation,
+  Message,
+  NearbyMe,
+  NearbyMessage,
+  NearbyPerson,
+  PublicUser,
+  ReadReceipt,
+  Role,
+  VisibilityScope,
+} from '../types';
 
 export class ApiError extends Error {
   constructor(
@@ -109,6 +121,20 @@ export const api = {
   },
   messages: {
     remove: (id: string) => request<void>(`/messages/${id}`, { method: 'DELETE' }),
+  },
+  nearby: {
+    me: () => request<{ me: NearbyMe }>('/nearby/me'),
+    join: (settings: { alias: string; visibility: VisibilityScope }) =>
+      request<{ me: NearbyMe }>('/nearby/join', { method: 'POST', body: { consent: true, ...settings } }),
+    updateSettings: (settings: { alias?: string; visibility?: VisibilityScope }) =>
+      request<{ me: NearbyMe }>('/nearby/settings', { method: 'PATCH', body: settings }),
+    leave: () => request<void>('/nearby/leave', { method: 'POST' }),
+    updateLocation: (location: { lat: number; lng: number; accuracy?: number | null; simulated?: boolean }) =>
+      request<{ me: NearbyMe }>('/nearby/location', { method: 'PUT', body: location }),
+    people: () => request<{ total: number; people: NearbyPerson[] }>('/nearby/people'),
+    messages: () => request<{ messages: NearbyMessage[] }>('/nearby/messages'),
+    send: (body: string) => request<{ message: NearbyMessage }>('/nearby/messages', { method: 'POST', body: { body } }),
+    remove: (id: string) => request<void>(`/nearby/messages/${id}`, { method: 'DELETE' }),
   },
   admin: {
     stats: () => request<{ stats: AdminStats }>('/admin/stats'),

@@ -5,6 +5,7 @@ import { Conversation } from '../models/Conversation.js';
 import { Message } from '../models/Message.js';
 import { ROLES, User } from '../models/User.js';
 import { toAccount } from '../services/mappers.js';
+import { leaveNearby } from '../services/nearby.js';
 import { revokeAllSessions } from '../services/tokens.js';
 import { disconnectUser, emitToUser } from '../socket/emitter.js';
 import { onlineCount } from '../socket/presence.js';
@@ -57,6 +58,7 @@ router.patch('/users/:id', async (req, res) => {
   if (update.isBanned) {
     // Kill every session and live connection of the banned user.
     await revokeAllSessions(id);
+    await leaveNearby(id);
     emitToUser(id, 'session:revoked', { reason: 'Your account has been banned by an administrator' });
     disconnectUser(id);
   }

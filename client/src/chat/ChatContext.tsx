@@ -6,6 +6,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth, useCurrentUser } from '../auth/AuthContext';
@@ -35,6 +36,8 @@ export interface ChatActions {
 
 const ChatStateContext = createContext<ChatState | null>(null);
 const ChatActionsContext = createContext<ChatActions | null>(null);
+/** The live socket, for features (like Nearby) that listen to their own events. */
+const ChatSocketContext = createContext<ChatSocket | null>(null);
 
 const SEND_TIMEOUT_MS = 10_000;
 const TYPING_EXPIRY_MS = 6_000;
@@ -57,6 +60,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { endSession } = useAuth();
   const navigate = useNavigate();
   const [state, dispatch] = useReducer(chatReducer, initialChatState);
+  const [liveSocket, setLiveSocket] = useState<ChatSocket | null>(null);
 
   const stateRef = useRef(state);
   const socketRef = useRef<ChatSocket | null>(null);
@@ -230,6 +234,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const socket = createSocket();
     socketRef.current = socket;
+    setLiveSocket(socket);
     const timers = typingTimers.current;
     let retriedAuth = false;
 
@@ -343,6 +348,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       socket.removeAllListeners();
       socket.disconnect();
       socketRef.current = null;
+      setLiveSocket(null);
       for (const timer of timers.values()) window.clearTimeout(timer);
       timers.clear();
     };
@@ -377,7 +383,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   return (
     <ChatActionsContext value={actions}>
-      <ChatStateContext value={state}>{children}</ChatStateContext>
+      <ChatSocketContext value={liveSocket}>
+        <ChatStateContext value={state}>{children}</ChatStateContext>
+      </ChatSocketContext>
     </ChatActionsContext>
   );
 }
@@ -386,6 +394,10 @@ export function useChatState(): ChatState {
   const context = use(ChatStateContext);
   if (!context) throw new Error('useChatState must be used inside <ChatProvider>');
   return context;
+}
+
+export function useChatSocket(): ChatSocket | null {
+  return use(ChatSocketContext);
 }
 
 export function useChatActions(): ChatActions {
