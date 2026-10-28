@@ -73,23 +73,38 @@ export async function editMessage(messageId: string, user: AuthUser, body: strin
   return dto;
 }
 
-/** Adds the user's reaction, or removes it if they already reacted with that emoji. */
+/**
+ * Each user has at most one reaction per message: picking an emoji replaces
+ * their current one, and picking the same emoji again removes it.
+ */
 export async function toggleReaction(messageId: string, user: AuthUser, emoji: ReactionEmoji): Promise<MessageDTO> {
   const message = await findAccessibleMessage(messageId, user);
   if (message.deletedAt) throw badRequest("You can't react to a removed message");
 
-  const reaction = { emoji, user: new Types.ObjectId(user.id) };
-  // Two conditional updates keep the toggle atomic without reading the array first.
-  const removed = await Message.updateOne(
-    { _id: message._id, reactions: { $elemMatch: reaction } },
-    { $pull: { reactions: reaction } },
-  );
-  if (removed.modifiedCount === 0) {
-    await Message.updateOne(
-      { _id: message._id, reactions: { $not: { $elemMatch: reaction } } },
-      { $push: { reactions: reaction } },
-    );
-  }
+  const userId = new Types.ObjectId(user.id);
+  const current = { $ifNull: ['$reactions', []] };
+  // A single pipeline update, so concurrent clicks can never leave a user with two reactions.
+  await Message.updateOne({ _id: message._id }, [
+    {
+      $set: {
+        reactions: {
+          $let: {
+            vars: {
+              others: { $filter: { input: current, cond: { $ne: ['$$this.user', userId] } } },
+              mine: { $filter: { input: current, cond: { $eq: ['$$this.user', userId] } } },
+            },
+            in: {
+              $cond: [
+                { $in: [emoji, '$$mine.emoji'] },
+                '$$others',
+                { $concatArrays: ['$$others', [{ emoji, user: userId }]] },
+              ],
+            },
+          },
+        },
+      },
+    },
+  ], { updatePipeline: true });
 
   const dto = await messageDTO(message._id);
   emitToConversation(dto.conversationId, 'message:updated', dto);

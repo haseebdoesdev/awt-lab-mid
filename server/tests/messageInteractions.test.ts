@@ -79,21 +79,38 @@ describe('editing', () => {
 });
 
 describe('reactions', () => {
-  it('toggles a reaction on and off and groups them by emoji', async () => {
+  it('groups reactions by emoji and toggles your own off', async () => {
     const { alice, bob, message } = await setup();
     const react = (agent: typeof alice.agent, emoji: string) =>
       agent.post(`/api/messages/${message.id}/reactions`).send({ emoji }).expect(200);
 
     await react(bob.agent, '👍');
-    await react(alice.agent, '👍');
-    const res = await react(bob.agent, '😂');
+    const res = await react(alice.agent, '👍');
     expect(res.body.message.reactions).toEqual([
       { emoji: '👍', users: [{ id: bob.user.id, username: 'bob' }, { id: alice.user.id, username: 'alice' }] },
-      { emoji: '😂', users: [{ id: bob.user.id, username: 'bob' }] },
     ]);
 
     const off = await react(bob.agent, '👍');
-    expect(off.body.message.reactions[0]).toEqual({ emoji: '👍', users: [{ id: alice.user.id, username: 'alice' }] });
+    expect(off.body.message.reactions).toEqual([{ emoji: '👍', users: [{ id: alice.user.id, username: 'alice' }] }]);
+  });
+
+  it('allows one reaction per person: a new emoji replaces the old one', async () => {
+    const { alice, bob, message } = await setup();
+    const react = (emoji: string) =>
+      bob.agent.post(`/api/messages/${message.id}/reactions`).send({ emoji }).expect(200);
+
+    await react('👍');
+    await react('❤️');
+    const res = await react('😂');
+    expect(res.body.message.reactions).toEqual([{ emoji: '😂', users: [{ id: bob.user.id, username: 'bob' }] }]);
+
+    // Concurrent clicks still leave exactly one reaction.
+    await Promise.all(['👍', '❤️', '😮', '😢', '🎉'].map(react));
+    const history = await alice.agent.get(`/api/conversations/${message.conversationId}/messages`).expect(200);
+    const mine = history.body.messages[0].reactions.flatMap((r: { users: { id: string }[] }) =>
+      r.users.filter((u) => u.id === bob.user.id),
+    );
+    expect(mine).toHaveLength(1);
   });
 
   it('only accepts the supported emojis', async () => {

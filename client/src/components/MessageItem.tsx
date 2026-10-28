@@ -157,6 +157,7 @@ export const MessageItem = memo(function MessageItem({
   const [editing, setEditing] = useState(false);
   const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null);
   const removed = message.deletedAt !== null;
+  const myReaction = message.reactions.find((r) => r.users.some((u) => u.id === myId))?.emoji;
   // Optimistic messages can't be reacted to, replied to or edited until the server confirms them.
   const interactive = !removed && !message.clientId && !editing;
 
@@ -333,12 +334,21 @@ export const MessageItem = memo(function MessageItem({
           {REACTION_EMOJIS.map((emoji) => (
             <IconButton
               key={emoji}
-              aria-label={`React with ${emoji}`}
+              aria-label={emoji === myReaction ? `Remove your ${emoji} reaction` : `React with ${emoji}`}
+              aria-pressed={emoji === myReaction}
               onClick={() => {
                 setPickerAnchor(null);
                 onReact(message, emoji);
               }}
-              sx={{ fontSize: 22, width: 40, height: 40, transition: 'transform 120ms', '&:hover': { transform: 'scale(1.25)' } }}
+              sx={{
+                fontSize: 22,
+                width: 40,
+                height: 40,
+                transition: 'transform 120ms',
+                '&:hover': { transform: 'scale(1.25)' },
+                // One reaction per person: show which one is yours.
+                ...(emoji === myReaction && { bgcolor: 'action.selected' }),
+              }}
             >
               {emoji}
             </IconButton>
