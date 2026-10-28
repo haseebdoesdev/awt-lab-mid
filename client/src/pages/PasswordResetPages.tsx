@@ -2,7 +2,7 @@ import { Alert, Button, Link, Stack, TextField } from '@mui/material';
 import { useActionState, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
-import { AuthCard } from '../components/AuthCard';
+import { AuthCard, tapTargetLinkSx } from '../components/AuthCard';
 import { PasswordField } from '../components/PasswordField';
 import { ApiError, api } from '../lib/api';
 
@@ -10,7 +10,7 @@ const toApiError = (error: unknown) =>
   error instanceof ApiError ? error : new ApiError(0, 'Unable to reach the server. Please try again.');
 
 const backToSignIn = (
-  <Link component={RouterLink} to="/login" sx={{ fontWeight: 600 }}>
+  <Link component={RouterLink} to="/login" sx={tapTargetLinkSx}>
     Back to sign in
   </Link>
 );

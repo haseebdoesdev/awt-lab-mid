@@ -2,6 +2,12 @@ import { Box, Card, CardContent, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
 import { Logo } from './Logo';
 
+/**
+ * Standalone text links on the auth pages: padding enlarges the tap area to
+ * ~33 px for thumbs, and the negative margin keeps the visual layout unchanged.
+ */
+export const tapTargetLinkSx = { display: 'inline-block', py: 1, my: -1, fontWeight: 600 } as const;
+
 /** Centered card used by the sign-in and sign-up pages. */
 export function AuthCard({ title, subtitle, children, footer }: {
   title: string;

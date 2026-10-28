@@ -133,12 +133,18 @@ interface MessageItemProps {
   showSender: boolean;
   canDelete: boolean;
   highlighted: boolean;
+  /** Touch screens: the action toolbar is shown for the tapped message only. */
+  actionsOpen: boolean;
+  onToggleActions: (messageId: string | null) => void;
   onDelete: (message: ClientMessage) => void;
   onRetry: (message: ClientMessage) => void;
   onReply: (message: ClientMessage) => void;
   onReact: (message: ClientMessage, emoji: ReactionEmoji) => void;
   onJumpTo: (messageId: string) => void;
 }
+
+const revealed = { opacity: 1, pointerEvents: 'auto' } as const;
+const hidden = { opacity: 0, pointerEvents: 'none' } as const;
 
 export const MessageItem = memo(function MessageItem({
   message,
@@ -148,6 +154,8 @@ export const MessageItem = memo(function MessageItem({
   showSender,
   canDelete,
   highlighted,
+  actionsOpen,
+  onToggleActions,
   onDelete,
   onRetry,
   onReply,
@@ -174,7 +182,9 @@ export const MessageItem = memo(function MessageItem({
         py: 0.25,
         transition: 'background-color 600ms',
         bgcolor: highlighted ? 'action.selected' : 'transparent',
-        '&:hover .message-actions, &:focus-within .message-actions': { opacity: 1 },
+        // Mouse users see the actions on hover; keyboard users when focus is inside.
+        '@media (hover: hover)': { '&:hover .message-actions': revealed },
+        '&:focus-within .message-actions': revealed,
       }}
     >
       {!mine && (
@@ -185,6 +195,7 @@ export const MessageItem = memo(function MessageItem({
 
       <Box
         sx={{
+          position: 'relative',
           maxWidth: { xs: '80%', md: '65%' },
           minWidth: 0,
           display: 'flex',
@@ -208,7 +219,15 @@ export const MessageItem = memo(function MessageItem({
         ) : (
           <Tooltip title={formatFull(message.createdAt)} placement={mine ? 'left' : 'right'} enterDelay={600}>
             <Box
+              data-message-bubble
+              onClick={(event) => {
+                // Touch screens: tapping a bubble shows its actions (links and quotes keep working).
+                if (!interactive || (event.target as HTMLElement).closest('a, button')) return;
+                onToggleActions(actionsOpen ? null : message.id);
+              }}
               sx={(theme) => ({
+                cursor: interactive ? 'pointer' : undefined,
+                '@media (hover: hover)': { cursor: 'auto' },
                 px: 1.75,
                 py: 1,
                 borderRadius: 3.5,
@@ -262,7 +281,12 @@ export const MessageItem = memo(function MessageItem({
                     color={reacted ? 'primary' : 'default'}
                     variant={reacted ? 'filled' : 'outlined'}
                     aria-pressed={reacted}
-                    sx={{ height: 24, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}
+                    sx={{
+                      height: 24,
+                      fontSize: 13,
+                      fontVariantNumeric: 'tabular-nums',
+                      '@media (pointer: coarse)': { height: 32 },
+                    }}
                   />
                 </Tooltip>
               );
@@ -278,49 +302,64 @@ export const MessageItem = memo(function MessageItem({
             </Button>
           </Typography>
         )}
-      </Box>
 
-      {interactive && (
-        <Stack
-          className="message-actions"
-          direction="row"
-          sx={{
-            opacity: pickerAnchor ? 1 : 0,
-            transition: 'opacity 150ms',
-            alignSelf: 'center',
-            bgcolor: 'background.paper',
-            border: 1,
-            borderColor: 'divider',
-            borderRadius: 2,
-            '@media (hover: none)': { opacity: 1 },
-          }}
-        >
-          <Tooltip title="React">
-            <IconButton size="small" aria-label="Add reaction" onClick={(e) => setPickerAnchor(e.currentTarget)}>
-              <AddReactionOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Reply">
-            <IconButton size="small" aria-label="Reply" onClick={() => onReply(message)}>
-              <ReplyIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          {mine && (
-            <Tooltip title="Edit">
-              <IconButton size="small" aria-label="Edit message" onClick={() => setEditing(true)}>
-                <EditOutlinedIcon fontSize="small" />
+        {interactive && (
+          <Stack
+            className="message-actions"
+            direction="row"
+            sx={{
+              // Floats over the bubble's top corner so it never takes width from the message.
+              position: 'absolute',
+              top: -20,
+              [mine ? 'right' : 'left']: 4,
+              zIndex: 2,
+              bgcolor: 'background.paper',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 2,
+              boxShadow: 2,
+              transition: 'opacity 150ms',
+              ...(actionsOpen || pickerAnchor ? revealed : hidden),
+              '@media (pointer: coarse)': { '& .MuiIconButton-root': { p: 1.25 } },
+            }}
+          >
+            <Tooltip title="React">
+              <IconButton size="small" aria-label="Add reaction" onClick={(e) => setPickerAnchor(e.currentTarget)}>
+                <AddReactionOutlinedIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-          )}
-          {canDelete && (
-            <Tooltip title="Remove">
-              <IconButton size="small" aria-label="Remove message" onClick={() => onDelete(message)}>
-                <DeleteOutlinedIcon fontSize="small" />
+            <Tooltip title="Reply">
+              <IconButton size="small" aria-label="Reply" onClick={() => {
+                  onToggleActions(null);
+                  onReply(message);
+                }}>
+                <ReplyIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-          )}
-        </Stack>
-      )}
+            {mine && (
+              <Tooltip title="Edit">
+                <IconButton size="small" aria-label="Edit message" onClick={() => {
+                    onToggleActions(null);
+                    setEditing(true);
+                  }}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {canDelete && (
+              <Tooltip title="Remove">
+                <IconButton size="small" aria-label="Remove message" onClick={() => {
+                    onToggleActions(null);
+                    onDelete(message);
+                  }}>
+                  <DeleteOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Stack>
+        )}
+
+      </Box>
 
       <Popover
         open={pickerAnchor !== null}
@@ -338,6 +377,7 @@ export const MessageItem = memo(function MessageItem({
               aria-pressed={emoji === myReaction}
               onClick={() => {
                 setPickerAnchor(null);
+                onToggleActions(null);
                 onReact(message, emoji);
               }}
               sx={{

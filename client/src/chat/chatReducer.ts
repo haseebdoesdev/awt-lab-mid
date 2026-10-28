@@ -178,7 +178,19 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
       let next = state;
       if (thread?.loaded && !duplicate) {
-        next = updateThread(next, message.conversationId, (t) => ({ ...t, items: [...t.items, message] }));
+        next = updateThread(next, message.conversationId, (t) => {
+          // Our own message can arrive before its acknowledgement: swap it in for the
+          // matching "sending…" placeholder instead of showing it twice.
+          const placeholder = t.items.find(
+            (m) => m.clientId && m.pending && m.sender.id === message.sender.id && m.body === message.body,
+          );
+          return {
+            ...t,
+            items: placeholder
+              ? t.items.map((m) => (m === placeholder ? { ...message, localKey: placeholder.clientId } : m))
+              : [...t.items, message],
+          };
+        });
       }
       next = updateConversation(next, message.conversationId, (c) => ({
         ...bumpLastMessage(c, message),

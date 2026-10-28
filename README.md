@@ -28,6 +28,10 @@ role-based administration and a one-command Docker deployment.
 - Infinite scroll through history (cursor pagination), date dividers, message grouping and clickable links
 - Desktop notifications for messages in background conversations
 - Light / dark / system theme and a responsive layout down to phone size
+- Touch-friendly on phones: tap a message to show its actions, tap targets of at least 32 px, 16 px
+  inputs (no iOS zoom-on-focus), `100dvh` layout, and Chat / Map tabs with an unread counter in the
+  local chat. Checked with Playwright on 320×568, 360×640, 393×660, 412×839, landscape 740×360 and
+  768×1024 screens (no horizontal overflow, nothing off-screen, every flow completed by tapping).
 
 **Local chat (Nearby)**
 - Chat with everyone within **1 km**, with a live map (Leaflet + OpenStreetMap)

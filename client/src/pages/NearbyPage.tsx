@@ -1,7 +1,22 @@
 import GpsFixedIcon from '@mui/icons-material/GpsFixed';
 import ScienceOutlinedIcon from '@mui/icons-material/ScienceOutlined';
 import SettingsIcon from '@mui/icons-material/Settings';
-import { Alert, Box, Button, Chip, IconButton, Snackbar, Stack, Tooltip, Typography } from '@mui/material';
+import {
+  Alert,
+  Badge,
+  Box,
+  Button,
+  Chip,
+  IconButton,
+  Snackbar,
+  Stack,
+  Tab,
+  Tabs,
+  Tooltip,
+  Typography,
+  useMediaQuery,
+} from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCurrentUser } from '../auth/AuthContext';
 import { useChatSocket } from '../chat/ChatContext';
@@ -40,6 +55,15 @@ export default function NearbyPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const peopleTimer = useRef<number | undefined>(undefined);
+  // Phones and landscape: map and chat are tabs, each with the full screen.
+  const narrow = useMediaQuery(useTheme().breakpoints.down('md'));
+  const [tab, setTab] = useState<'chat' | 'map'>('chat');
+  const [unseen, setUnseen] = useState(0);
+  const chatHiddenRef = useRef(false);
+  useEffect(() => {
+    chatHiddenRef.current = narrow && tab === 'map';
+    if (!chatHiddenRef.current) setUnseen(0);
+  }, [tab, narrow]);
 
   const joined = Boolean(me?.joined);
   const located = Boolean(me?.location);
@@ -79,8 +103,10 @@ export default function NearbyPage() {
   // Live updates: new/removed local messages, and "something changed near you".
   useEffect(() => {
     if (!socket || !joined) return;
-    const onMessage = (message: NearbyMessage) =>
+    const onMessage = (message: NearbyMessage) => {
       setMessages((list) => (list.some((m) => m.id === message.id) ? list : [...list, message]));
+      if (chatHiddenRef.current && message.senderToken !== me?.selfToken) setUnseen((n) => n + 1);
+    };
     const onDeleted = ({ id }: { id: string }) => setMessages((list) => list.filter((m) => m.id !== id));
     const onChanged = () => {
       window.clearTimeout(peopleTimer.current);
@@ -95,7 +121,7 @@ export default function NearbyPage() {
       socket.off('nearby:changed', onChanged);
       window.clearTimeout(peopleTimer.current);
     };
-  }, [socket, joined, refreshPeople]);
+  }, [socket, joined, refreshPeople, me?.selfToken]);
 
   // Distances change as people move; keep the map fresh.
   useEffect(() => {
@@ -164,7 +190,13 @@ export default function NearbyPage() {
           </Typography>
         </Box>
         <Tooltip title="Change who can see you on the map" describeChild>
-          <Chip size="small" variant="outlined" label={`Map: ${visibilityLabel}`} onClick={() => setSettingsOpen(true)} />
+          <Chip
+            size="small"
+            variant="outlined"
+            label={`Map: ${visibilityLabel}`}
+            onClick={() => setSettingsOpen(true)}
+            sx={{ '@media (pointer: coarse)': { height: 32 } }}
+          />
         </Tooltip>
         {me.location && !demo && !!me.location.accuracy && (
           <Chip size="small" icon={<GpsFixedIcon />} label={`±${me.location.accuracy} m`} />
@@ -200,16 +232,33 @@ export default function NearbyPage() {
         </Alert>
       )}
 
+      {narrow && (
+        <Tabs value={tab} onChange={(_e, value) => setTab(value)} variant="fullWidth" sx={{ borderBottom: 1, borderColor: 'divider', minHeight: 44 }}>
+          <Tab
+            value="chat"
+            aria-label={unseen > 0 ? `Chat, ${unseen} new ${unseen === 1 ? 'message' : 'messages'}` : 'Chat'}
+            label={
+              <Badge color="primary" badgeContent={unseen} max={99} sx={{ '& .MuiBadge-badge': { right: -14 } }}>
+                Chat
+              </Badge>
+            }
+            sx={{ minHeight: 44 }}
+          />
+          <Tab value="map" label={`Map · ${people.total} nearby`} sx={{ minHeight: 44 }} />
+        </Tabs>
+      )}
+
       <Box
         sx={{
           flex: 1,
           minHeight: 0,
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1.2fr) minmax(0, 1fr)' },
-          gridTemplateRows: { xs: '260px minmax(0, 1fr)', md: 'minmax(0, 1fr)' },
+          gridTemplateRows: 'minmax(0, 1fr)',
         }}
       >
-        <Box sx={{ p: 1.5, minHeight: 0 }}>
+        {/* Both panels stay mounted on phones so the map keeps its position between tab switches. */}
+        <Box sx={{ p: 1.5, minHeight: 0, display: narrow && tab !== 'map' ? 'none' : 'block' }}>
           <NearbyMap
             me={me.location}
             radiusMeters={me.radiusMeters}
@@ -221,7 +270,7 @@ export default function NearbyPage() {
             }
           />
         </Box>
-        <Stack sx={{ minHeight: 0, borderLeft: { md: 1 }, borderTop: { xs: 1, md: 0 }, borderColor: 'divider' }}>
+        <Stack sx={{ minHeight: 0, borderLeft: { md: 1 }, borderColor: 'divider', display: narrow && tab !== 'chat' ? 'none' : 'flex' }}>
           <NearbyChat
             messages={messages}
             selfToken={me.selfToken}

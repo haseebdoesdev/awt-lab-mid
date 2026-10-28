@@ -38,7 +38,7 @@ export function UserMenu() {
     permission === 'granted'
       ? 'Desktop notifications on'
       : permission === 'denied'
-        ? 'Notifications blocked by browser'
+        ? 'Notifications blocked'
         : 'Enable desktop notifications';
 
   return (
@@ -84,7 +84,7 @@ export function UserMenu() {
             <ListItemIcon>
               <NotificationsActiveIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText>{notificationLabel}</ListItemText>
+            <ListItemText sx={{ whiteSpace: 'normal' }}>{notificationLabel}</ListItemText>
           </MenuItem>
         )}
         <MenuItem onClick={() => void logout()}>

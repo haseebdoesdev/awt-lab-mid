@@ -201,6 +201,11 @@ export function NearbySettingsDialog({
               </Typography>
               <VisibilityPicker value={visibility} onChange={setVisibility} />
             </Box>
+            <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 2 }}>
+              <Button color="error" onClick={() => setConfirmLeave(true)}>
+                Leave local chat
+              </Button>
+            </Box>
           </Stack>
         )}
         {error && (
@@ -209,7 +214,7 @@ export function NearbySettingsDialog({
           </Alert>
         )}
       </DialogContent>
-      <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+      <DialogActions sx={{ px: 3, pb: 2, flexWrap: 'wrap', gap: 1 }}>
         {confirmLeave ? (
           <>
             <Button onClick={() => setConfirmLeave(false)} disabled={busy}>
@@ -221,17 +226,12 @@ export function NearbySettingsDialog({
           </>
         ) : (
           <>
-            <Button color="error" onClick={() => setConfirmLeave(true)}>
-              Leave local chat
+            <Button onClick={onClose} disabled={busy}>
+              Cancel
             </Button>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button onClick={onClose} disabled={busy}>
-                Cancel
-              </Button>
-              <Button variant="contained" loading={busy} onClick={() => run(() => onSave({ alias, visibility }))}>
-                Save
-              </Button>
-            </Box>
+            <Button variant="contained" loading={busy} onClick={() => run(() => onSave({ alias, visibility }))}>
+              Save
+            </Button>
           </>
         )}
       </DialogActions>

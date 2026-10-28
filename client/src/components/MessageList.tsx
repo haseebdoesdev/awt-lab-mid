@@ -74,6 +74,8 @@ export function MessageList({
   const [unseenBelow, setUnseenBelow] = useState(0);
   const [toDelete, setToDelete] = useState<ClientMessage | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  // Touch screens: which message currently shows its action toolbar.
+  const [actionsFor, setActionsFor] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const items = thread?.items ?? [];
@@ -161,6 +163,10 @@ export function MessageList({
       <Box
         ref={scrollRef}
         onScroll={onScroll}
+        onClick={(event) => {
+          // Tapping outside any bubble hides the action toolbar.
+          if (!(event.target as HTMLElement).closest('[data-message-bubble], .message-actions')) setActionsFor(null);
+        }}
         role="log"
         aria-live="polite"
         aria-label="Messages"
@@ -219,6 +225,8 @@ export function MessageList({
                 myId={me.id}
                 canDelete={me.role === 'admin'}
                 highlighted={highlightId === message.id}
+                actionsOpen={actionsFor === message.id}
+                onToggleActions={setActionsFor}
                 onReply={onReply}
                 onReact={handleReact}
                 onJumpTo={jumpTo}

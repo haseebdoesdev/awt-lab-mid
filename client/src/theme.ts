@@ -28,9 +28,15 @@ export const theme = createTheme({
     button: { textTransform: 'none', fontWeight: 600 },
   },
   components: {
-    MuiButton: { defaultProps: { disableElevation: true } },
+    MuiButton: {
+      defaultProps: { disableElevation: true },
+      // Touch screens: small text buttons get a thumb-sized height.
+      styleOverrides: { sizeSmall: { '@media (pointer: coarse)': { minHeight: 36 } } },
+    },
     MuiAppBar: { defaultProps: { elevation: 0, color: 'inherit' } },
     MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' } } },
     MuiTooltip: { defaultProps: { arrow: true } },
+    // Touch screens: small icon buttons get a thumb-sized (~36 px) tap area.
+    MuiIconButton: { styleOverrides: { sizeSmall: { '@media (pointer: coarse)': { padding: 8 } } } },
   },
 });

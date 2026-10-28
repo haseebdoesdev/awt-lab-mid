@@ -133,11 +133,15 @@ export function NearbyMap({ me, radiusMeters, people, onPick }: NearbyMapProps) 
       aria-label="Map of people near you"
       sx={(t) => ({
         height: '100%',
-        minHeight: 260,
+        minHeight: { xs: 150, md: 260 },
         borderRadius: 2,
         overflow: 'hidden',
         cursor: onPick ? 'crosshair' : undefined,
         '& .leaflet-container': { cursor: onPick ? 'crosshair' : undefined, fontFamily: 'inherit' },
+        '@media (pointer: coarse)': {
+          // Leaflet's own stylesheet sizes these via .leaflet-touch on this same element.
+          '&.leaflet-touch .leaflet-bar a': { width: 40, height: 40, lineHeight: '40px', fontSize: 22 },
+        },
         // Darker map tiles in dark mode.
         ...t.applyStyles('dark', {
           '& .leaflet-tile': { filter: 'invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9)' },

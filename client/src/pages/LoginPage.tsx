@@ -2,7 +2,7 @@ import { Alert, Box, Button, Link, Stack, TextField } from '@mui/material';
 import { useActionState, useState } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
-import { AuthCard } from '../components/AuthCard';
+import { AuthCard, tapTargetLinkSx } from '../components/AuthCard';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { PasswordField } from '../components/PasswordField';
 import { ApiError } from '../lib/api';
@@ -33,7 +33,7 @@ export function LoginPage() {
       footer={
         <>
           New here?{' '}
-          <Link component={RouterLink} to="/register" sx={{ fontWeight: 600 }}>
+          <Link component={RouterLink} to="/register" sx={tapTargetLinkSx}>
             Create an account
           </Link>
         </>
@@ -63,7 +63,7 @@ export function LoginPage() {
           fullWidth
         />
         <Box sx={{ textAlign: 'right', mt: '4px !important' }}>
-          <Link component={RouterLink} to="/forgot-password" variant="body2">
+          <Link component={RouterLink} to="/forgot-password" variant="body2" sx={{ ...tapTargetLinkSx, fontWeight: 500 }}>
             Forgot password?
           </Link>
         </Box>

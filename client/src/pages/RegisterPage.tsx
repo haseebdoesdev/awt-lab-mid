@@ -2,7 +2,7 @@ import { Alert, Button, Link, Stack, TextField } from '@mui/material';
 import { useActionState, useState } from 'react';
 import { Link as RouterLink } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
-import { AuthCard } from '../components/AuthCard';
+import { AuthCard, tapTargetLinkSx } from '../components/AuthCard';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { PasswordField } from '../components/PasswordField';
 import { ApiError } from '../lib/api';
@@ -39,7 +39,7 @@ export function RegisterPage() {
       footer={
         <>
           Already have an account?{' '}
-          <Link component={RouterLink} to="/login" sx={{ fontWeight: 600 }}>
+          <Link component={RouterLink} to="/login" sx={tapTargetLinkSx}>
             Sign in
           </Link>
         </>
