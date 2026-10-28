@@ -1,0 +1,32 @@
+# API + HTTPS reverse proxy for a single EC2 instance (database: MongoDB Atlas).
+# Started by start.sh, which writes .env from AWS Parameter Store first.
+name: pulse-api
+
+services:
+  server:
+    build: ../../server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      COOKIE_SECURE: "true"
+      # Requests arrive through Caddy, and API calls also through Vercel's rewrite.
+      TRUST_PROXY: 2
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is set by start.sh}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - server
+
+volumes:
+  caddy-data:
