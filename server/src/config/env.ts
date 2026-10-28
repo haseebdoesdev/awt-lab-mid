@@ -36,6 +36,9 @@ const schema = z.object({
   SMTP_PASS: z.string().optional(),
   MAIL_FROM: z.string().default('Pulse Chat <no-reply@pulse.local>'),
 
+  // OAuth client id from Google Cloud; enables "Sign in with Google" when set.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+
   // Optional bootstrap admin account, created on startup if it does not exist.
   ADMIN_USERNAME: z.string().default('admin'),
   ADMIN_EMAIL: z.email().optional(),

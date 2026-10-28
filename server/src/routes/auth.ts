@@ -6,6 +6,7 @@ import { currentUser, requireAuth } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimit.js';
 import { User, type UserDoc, usernameCollation } from '../models/User.js';
 import { toAccount, toAuthUser } from '../services/mappers.js';
+import { findOrCreateGoogleUser, verifyGoogleCredential } from '../services/google.js';
 import { requestPasswordReset, resetPassword } from '../services/passwordReset.js';
 import {
   REFRESH_COOKIE,
@@ -55,6 +56,20 @@ async function startSession(req: Request, res: Response, user: UserDoc) {
   const refreshToken = await createSession(user.id, req.get('user-agent'));
   setAuthCookies(res, toAuthUser(user), refreshToken);
 }
+
+/** Public client configuration (the Google client id is not a secret). */
+router.get('/config', (_req, res) => {
+  res.json({ googleClientId: env.GOOGLE_CLIENT_ID ?? null });
+});
+
+/** "Sign in with Google": exchanges a Google ID token for a normal session. */
+router.post('/google', authLimiter, async (req, res) => {
+  const { credential } = z.object({ credential: z.string().min(1, 'Missing Google credential') }).parse(req.body);
+  const profile = await verifyGoogleCredential(credential);
+  const { user, created } = await findOrCreateGoogleUser(profile);
+  await startSession(req, res, user);
+  res.status(created ? 201 : 200).json({ user: toAccount(user), created });
+});
 
 router.post('/register', authLimiter, async (req, res) => {
   const { username, email, password } = registerSchema.parse(req.body);

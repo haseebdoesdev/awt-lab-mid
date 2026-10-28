@@ -3,6 +3,7 @@ import { useActionState, useState } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { AuthCard } from '../components/AuthCard';
+import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { PasswordField } from '../components/PasswordField';
 import { ApiError } from '../lib/api';
 
@@ -76,6 +77,7 @@ export function LoginPage() {
           Sign in
         </Button>
       </Stack>
+      <GoogleSignInButton text="signin_with" />
     </AuthCard>
   );
 }

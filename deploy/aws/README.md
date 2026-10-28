@@ -48,6 +48,9 @@ from the Vercel dashboard.
 and optionally `/pulse/SMTP_PORT` / `/pulse/MAIL_FROM`, then run `start.sh`. Until then, reset links
 appear in the API logs: `cd /opt/pulse/deploy/aws && sudo docker compose logs server`.
 
+**Sign in with Google:** create a parameter `/pulse/GOOGLE_CLIENT_ID` (type String) with the OAuth
+client id, then run `start.sh`. The button appears on the login page without a frontend rebuild.
+
 **Save credits:** stop the instance in the EC2 console when you don't need it. The Elastic IP keeps
 the same address, so starting it again needs no changes, and the containers restart automatically.
 Running cost is about $20/month (t3.small plus the public IP).

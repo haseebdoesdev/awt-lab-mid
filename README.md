@@ -32,6 +32,8 @@ role-based administration and a one-command Docker deployment.
 **Accounts and administration**
 - Sign up / sign in with email or username; passwords hashed with bcrypt
 - Short-lived JWT access tokens plus rotating refresh tokens, both in httpOnly cookies
+- Sign in with Google (Google Identity Services): the server verifies Google's signed ID token, creates an
+  account on first sign-in, or links Google to an existing account with the same verified email
 - Forgot password: a single-use reset link (valid 30 minutes) is emailed over SMTP; resetting signs the
   account out on every device
 - Two roles: **user** and **admin**
@@ -188,6 +190,7 @@ Server environment variables (validated with Zod on startup):
 | `PASSWORD_RESET_TTL_MINUTES` | `30` | How long a reset link stays valid |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | – / `587` | Outgoing mail server. Without `SMTP_HOST`, reset emails are printed to the server log |
 | `SMTP_SECURE` | `true` on port 465 | Use TLS from the start of the connection |
+| `GOOGLE_CLIENT_ID` | – | Google OAuth client id; shows the "Sign in with Google" button when set |
 | `MAIL_FROM` | `Pulse Chat <no-reply@pulse.local>` | Sender of outgoing email |
 
 ## REST API
@@ -201,6 +204,8 @@ All routes are under `/api`. Errors use the shape `{ "error": string, "details"?
 | POST | `/auth/refresh` | refresh cookie | Rotate the refresh token, issue a new access token |
 | POST | `/auth/logout` | public | Revoke the session and clear cookies |
 | GET | `/auth/me` | user | Current account |
+| GET | `/auth/config` | public | Client settings (`googleClientId`) |
+| POST | `/auth/google` | public | Sign in with a Google ID token (`credential`) |
 | POST | `/auth/forgot-password` | public | Email a reset link (same response whether or not the account exists) |
 | POST | `/auth/reset-password` | public | Set a new password with `token` from the link; revokes all sessions |
 | GET | `/users?q=` | user | Search people to message (online first) |
@@ -247,11 +252,12 @@ The handshake is authenticated with the access-token cookie. On connect, each so
 npm test
 ```
 
-57 backend tests run against an in-memory MongoDB and cover:
+65 backend tests run against an in-memory MongoDB and cover:
 
 - registration and login validation
 - refresh-token rotation and its grace period
 - logout revocation
+- Sign in with Google: token checks, account creation, linking by verified email, bans
 - forgot / reset password: no account enumeration, hashed single-use tokens, expiry, sign-out everywhere
 - room permissions
 - DM privacy and de-duplication

@@ -45,6 +45,7 @@ const NO_REFRESH = [
   '/auth/logout',
   '/auth/forgot-password',
   '/auth/reset-password',
+  '/auth/google',
 ];
 
 async function request<T>(path: string, init: { method?: string; body?: unknown } = {}, retry = true): Promise<T> {
@@ -78,6 +79,9 @@ export const api = {
       request<{ user: Account }>('/auth/register', { method: 'POST', body: input }),
     logout: () => request<void>('/auth/logout', { method: 'POST' }),
     socketToken: () => request<{ token: string }>('/auth/socket-token'),
+    config: () => request<{ googleClientId: string | null }>('/auth/config'),
+    google: (credential: string) =>
+      request<{ user: Account; created: boolean }>('/auth/google', { method: 'POST', body: { credential } }),
     forgotPassword: (email: string) =>
       request<{ message: string }>('/auth/forgot-password', { method: 'POST', body: { email } }),
     resetPassword: (token: string, password: string) =>

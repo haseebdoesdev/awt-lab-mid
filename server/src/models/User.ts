@@ -6,7 +6,10 @@ export type Role = (typeof ROLES)[number];
 export interface IUser {
   username: string;
   email: string;
-  passwordHash: string;
+  /** Null for accounts created with Google that never set a password. */
+  passwordHash: string | null;
+  /** Google account id (`sub`) once the user has signed in with Google. */
+  googleId: string | null;
   role: Role;
   isBanned: boolean;
   lastSeen: Date | null;
@@ -30,13 +33,16 @@ const userSchema = new Schema<IUser>(
       match: /^[a-zA-Z0-9_.-]+$/,
     },
     email: { type: String, required: true, unique: true, trim: true, lowercase: true },
-    passwordHash: { type: String, required: true, select: false },
+    passwordHash: { type: String, default: null, select: false },
+    googleId: { type: String, default: null },
     role: { type: String, enum: ROLES, default: 'user', required: true },
     isBanned: { type: Boolean, default: false, required: true },
     lastSeen: { type: Date, default: null },
   },
   { timestamps: true },
 );
+
+userSchema.index({ googleId: 1 }, { unique: true, partialFilterExpression: { googleId: { $type: 'string' } } });
 
 // "Alice" and "alice" are the same username.
 userSchema.index({ username: 1 }, { unique: true, collation: usernameCollation });
