@@ -1,13 +1,13 @@
 import DoneIcon from '@mui/icons-material/Done';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import { Alert, Box, Button, CircularProgress, Divider, Fab, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Divider, Fab, Snackbar, Typography } from '@mui/material';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useCurrentUser } from '../auth/AuthContext';
 import { useChatActions, useChatState } from '../chat/ChatContext';
 import type { ClientMessage, Thread } from '../chat/chatReducer';
 import { formatDay, isSameDay } from '../lib/format';
-import type { Conversation } from '../types';
+import type { Conversation, ReactionEmoji } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MessageItem } from './MessageItem';
 
@@ -55,9 +55,17 @@ function SeenMarker({ conversation, last }: { conversation: Conversation; last: 
  * loads older pages with an IntersectionObserver when the top is reached and
  * preserves the scroll position while prepending.
  */
-export function MessageList({ conversation, thread }: { conversation: Conversation; thread: Thread | undefined }) {
+export function MessageList({
+  conversation,
+  thread,
+  onReply,
+}: {
+  conversation: Conversation;
+  thread: Thread | undefined;
+  onReply: (message: ClientMessage) => void;
+}) {
   const me = useCurrentUser();
-  const { loadOlderMessages, retryMessage, deleteMessage, openConversation } = useChatActions();
+  const { loadOlderMessages, retryMessage, deleteMessage, openConversation, toggleReaction } = useChatActions();
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const distanceFromBottom = useRef(0);
@@ -65,6 +73,8 @@ export function MessageList({ conversation, thread }: { conversation: Conversati
   const edges = useRef<{ first?: string; last?: string }>({});
   const [unseenBelow, setUnseenBelow] = useState(0);
   const [toDelete, setToDelete] = useState<ClientMessage | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const items = thread?.items ?? [];
   const firstId = items[0]?.id;
@@ -125,6 +135,24 @@ export function MessageList({ conversation, thread }: { conversation: Conversati
 
   const handleDelete = useCallback((message: ClientMessage) => setToDelete(message), []);
   const handleRetry = useCallback((message: ClientMessage) => retryMessage(message), [retryMessage]);
+  const handleReact = useCallback(
+    (message: ClientMessage, emoji: ReactionEmoji) => {
+      toggleReaction(message.id, emoji).catch((error: Error) => setNotice(error.message));
+    },
+    [toggleReaction],
+  );
+
+  // Scrolls to the quoted message and flashes it.
+  const jumpTo = useCallback((messageId: string) => {
+    const target = document.getElementById(`message-${messageId}`);
+    if (!target) {
+      setNotice('That message is further back – scroll up to load it');
+      return;
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightId(messageId);
+    window.setTimeout(() => setHighlightId((current) => (current === messageId ? null : current)), 1600);
+  }, []);
 
   const lastConfirmed = [...items].reverse().find((m) => !m.clientId && !m.deletedAt);
 
@@ -188,7 +216,12 @@ export function MessageList({ conversation, thread }: { conversation: Conversati
                 mine={message.sender.id === me.id}
                 grouped={!newDay && !startsGroup(previous, message)}
                 showSender={conversation.type === 'room'}
+                myId={me.id}
                 canDelete={me.role === 'admin'}
+                highlighted={highlightId === message.id}
+                onReply={onReply}
+                onReact={handleReact}
+                onJumpTo={jumpTo}
                 onDelete={handleDelete}
                 onRetry={handleRetry}
               />
@@ -211,6 +244,14 @@ export function MessageList({ conversation, thread }: { conversation: Conversati
           {unseenBelow} new {unseenBelow === 1 ? 'message' : 'messages'}
         </Fab>
       )}
+
+      <Snackbar
+        open={notice !== null}
+        autoHideDuration={4000}
+        onClose={() => setNotice(null)}
+        message={notice}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
 
       <ConfirmDialog
         open={toDelete !== null}

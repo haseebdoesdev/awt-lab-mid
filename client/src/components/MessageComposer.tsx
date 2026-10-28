@@ -1,7 +1,10 @@
+import CloseIcon from '@mui/icons-material/Close';
+import ReplyIcon from '@mui/icons-material/Reply';
 import SendIcon from '@mui/icons-material/Send';
 import { Box, IconButton, TextField, Tooltip, Typography } from '@mui/material';
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useChatActions } from '../chat/ChatContext';
+import type { Message } from '../types';
 
 const MAX_LENGTH = 2000;
 const TYPING_IDLE_MS = 3000;
@@ -29,7 +32,15 @@ function writeDraft(conversationId: string, value: string) {
  * Message input: Enter sends, Shift+Enter adds a new line. Emits throttled
  * typing notifications and keeps an unsent draft per conversation.
  */
-export function MessageComposer({ conversationId, placeholder }: { conversationId: string; placeholder: string }) {
+interface MessageComposerProps {
+  conversationId: string;
+  placeholder: string;
+  /** The message being replied to, shown above the input. */
+  replyingTo: Message | null;
+  onCancelReply: () => void;
+}
+
+export function MessageComposer({ conversationId, placeholder, replyingTo, onCancelReply }: MessageComposerProps) {
   const { sendMessage, setTyping } = useChatActions();
   const [draft, setDraft] = useState(() => readDraft(conversationId));
   const typing = useRef({ active: false, lastSentAt: 0, idleTimer: 0 });
@@ -77,13 +88,23 @@ export function MessageComposer({ conversationId, placeholder }: { conversationI
   const submit = () => {
     const body = draft.trim();
     if (!body || body.length > MAX_LENGTH) return;
-    sendMessage(conversationId, body);
+    const replyTo = replyingTo
+      ? { id: replyingTo.id, sender: replyingTo.sender, body: replyingTo.body, deletedAt: replyingTo.deletedAt }
+      : null;
+    sendMessage(conversationId, body, replyTo);
+    onCancelReply();
     setDraft('');
     stopTyping();
     inputRef.current?.focus();
   };
 
+  // Focus the input as soon as a reply is started.
+  useEffect(() => {
+    if (replyingTo) inputRef.current?.focus();
+  }, [replyingTo]);
+
   const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && replyingTo) onCancelReply();
     // Don't send while an IME composition (e.g. Japanese input) is in progress.
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
@@ -94,47 +115,82 @@ export function MessageComposer({ conversationId, placeholder }: { conversationI
   const remaining = MAX_LENGTH - draft.length;
 
   return (
-    <Box
-      component="form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        submit();
-      }}
-      sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, px: { xs: 1.5, md: 3 }, pb: 2, pt: 0.5 }}
-    >
-      <TextField
-        inputRef={inputRef}
-        value={draft}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
-        onBlur={stopTyping}
-        placeholder={placeholder}
-        multiline
-        maxRows={6}
-        fullWidth
-        autoFocus
-        autoComplete="off"
-        error={remaining < 0}
-        helperText={remaining < 200 ? `${remaining} characters left` : undefined}
-        slotProps={{
-          htmlInput: { 'aria-label': placeholder },
-          input: { sx: { borderRadius: 3, bgcolor: 'background.paper' } },
+    <>
+      {replyingTo && (
+        <Box
+          sx={{
+            mx: { xs: 1.5, md: 3 },
+            mb: 0.5,
+            pl: 1.5,
+            pr: 0.5,
+            py: 0.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            borderLeft: 3,
+            borderColor: 'primary.main',
+            bgcolor: 'action.hover',
+            borderRadius: 1.5,
+          }}
+        >
+          <ReplyIcon fontSize="small" color="primary" />
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography variant="caption" component="div" sx={{ fontWeight: 700 }}>
+              Replying to {replyingTo.sender.username}
+            </Typography>
+            <Typography variant="caption" component="div" color="text.secondary" noWrap>
+              {replyingTo.body}
+            </Typography>
+          </Box>
+          <Tooltip title="Cancel reply (Esc)">
+            <IconButton size="small" onClick={onCancelReply} aria-label="Cancel reply">
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
+      <Box
+        component="form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
         }}
-      />
-      <Tooltip title="Send (Enter)">
-        <span>
-          <IconButton
-            type="submit"
-            color="primary"
-            disabled={!draft.trim() || remaining < 0}
-            aria-label="Send message"
-            sx={{ mb: remaining < 200 ? 3 : 0.5 }}
-          >
-            <SendIcon />
-          </IconButton>
-        </span>
-      </Tooltip>
-    </Box>
+        sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, px: { xs: 1.5, md: 3 }, pb: 2, pt: 0.5 }}
+      >
+        <TextField
+          inputRef={inputRef}
+          value={draft}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          onBlur={stopTyping}
+          placeholder={placeholder}
+          multiline
+          maxRows={6}
+          fullWidth
+          autoFocus
+          autoComplete="off"
+          error={remaining < 0}
+          helperText={remaining < 200 ? `${remaining} characters left` : undefined}
+          slotProps={{
+            htmlInput: { 'aria-label': placeholder },
+            input: { sx: { borderRadius: 3, bgcolor: 'background.paper' } },
+          }}
+        />
+        <Tooltip title="Send (Enter)">
+          <span>
+            <IconButton
+              type="submit"
+              color="primary"
+              disabled={!draft.trim() || remaining < 0}
+              aria-label="Send message"
+              sx={{ mb: remaining < 200 ? 3 : 0.5 }}
+            >
+              <SendIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
+    </>
   );
 }
 

@@ -12,7 +12,7 @@ import { useAuth, useCurrentUser } from '../auth/AuthContext';
 import { api, refreshSession } from '../lib/api';
 import { setAppBadge, showNotification } from '../lib/notifications';
 import { type ChatSocket, createSocket } from '../lib/socket';
-import type { Conversation, Message } from '../types';
+import type { AckResponse, Conversation, Message, ReactionEmoji, ReplyPreview } from '../types';
 import { type ChatState, type ClientMessage, chatReducer, initialChatState } from './chatReducer';
 
 export interface ChatActions {
@@ -21,7 +21,10 @@ export interface ChatActions {
   openConversation: (conversationId: string) => Promise<void>;
   markRead: (conversationId: string) => void;
   loadOlderMessages: (conversationId: string) => Promise<void>;
-  sendMessage: (conversationId: string, body: string) => void;
+  sendMessage: (conversationId: string, body: string, replyTo?: ReplyPreview | null) => void;
+  /** Resolves when saved; rejects with a user-facing message. */
+  editMessage: (messageId: string, body: string) => Promise<void>;
+  toggleReaction: (messageId: string, emoji: ReactionEmoji) => Promise<void>;
   retryMessage: (message: ClientMessage) => void;
   setTyping: (conversationId: string, isTyping: boolean) => void;
   startDirectMessage: (userId: string) => Promise<string>;
@@ -110,12 +113,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (!sock) throw new Error('Not connected');
         const response = await sock
           .timeout(SEND_TIMEOUT_MS)
-          .emitWithAck('message:send', { conversationId, body: message.body });
+          .emitWithAck('message:send', { conversationId, body: message.body, replyToId: message.replyTo?.id });
         if (response.ok) dispatch({ type: 'message/confirmed', clientId, message: response.data });
         else dispatch({ type: 'message/failed', conversationId, clientId, error: response.error });
       } catch {
         dispatch({ type: 'message/failed', conversationId, clientId, error: 'Not delivered – check your connection' });
       }
+    };
+
+    const connectedSocket = () => {
+      const sock = socket();
+      if (!sock?.connected) throw new Error('You are offline – try again when reconnected');
+      return sock.timeout(SEND_TIMEOUT_MS);
+    };
+
+    /** Applies the message returned in an acknowledgement, or throws its error. */
+    const applyUpdate = async (ack: Promise<AckResponse<Message>>) => {
+      const response = await ack.catch(() => {
+        throw new Error('The server did not respond – try again');
+      });
+      if (!response.ok) throw new Error(response.error);
+      dispatch({ type: 'message/updated', message: response.data });
     };
 
     return {
@@ -146,7 +164,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       },
 
-      sendMessage(conversationId, body) {
+      sendMessage(conversationId, body, replyTo = null) {
         const clientId = `pending-${Date.now()}-${++pendingSequence}`;
         const message: ClientMessage = {
           id: clientId,
@@ -154,12 +172,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           conversationId,
           body,
           sender: { id: me.id, username: me.username, role: me.role },
+          replyTo,
+          reactions: [],
           createdAt: new Date().toISOString(),
+          editedAt: null,
           deletedAt: null,
           pending: true,
         };
         dispatch({ type: 'message/pending', message });
         void deliver(message);
+      },
+
+      editMessage(messageId, body) {
+        return applyUpdate(connectedSocket().emitWithAck('message:edit', { messageId, body }));
+      },
+
+      toggleReaction(messageId, emoji) {
+        return applyUpdate(connectedSocket().emitWithAck('message:react', { messageId, emoji }));
       },
 
       retryMessage(message) {
@@ -265,6 +294,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (mine) return;
       if (onScreen) actions.markRead(message.conversationId);
       else notify(message);
+    });
+
+    socket.on('message:updated', (message) => {
+      dispatch({ type: 'message/updated', message });
     });
 
     socket.on('message:deleted', ({ conversationId, messageId }) => {

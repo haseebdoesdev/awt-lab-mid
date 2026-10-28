@@ -18,12 +18,30 @@ export interface Account extends PublicUser {
   createdAt: string;
 }
 
+export const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
+export type ReactionEmoji = (typeof REACTION_EMOJIS)[number];
+
+export interface Reaction {
+  emoji: ReactionEmoji;
+  users: { id: string; username: string }[];
+}
+
+export interface ReplyPreview {
+  id: string;
+  sender: { id: string; username: string };
+  body: string;
+  deletedAt: string | null;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
   sender: { id: string; username: string; role: Role };
   body: string;
+  replyTo: ReplyPreview | null;
+  reactions: Reaction[];
   createdAt: string;
+  editedAt: string | null;
   deletedAt: string | null;
 }
 
@@ -75,6 +93,7 @@ export interface PresencePayload {
 
 export interface ServerToClientEvents {
   'message:new': (message: Message) => void;
+  'message:updated': (message: Message) => void;
   'message:deleted': (payload: { conversationId: string; messageId: string }) => void;
   typing: (payload: TypingPayload) => void;
   presence: (payload: PresencePayload) => void;
@@ -86,7 +105,15 @@ export interface ServerToClientEvents {
 
 export interface ClientToServerEvents {
   'message:send': (
-    payload: { conversationId: string; body: string },
+    payload: { conversationId: string; body: string; replyToId?: string },
+    ack: (response: AckResponse<Message>) => void,
+  ) => void;
+  'message:edit': (
+    payload: { messageId: string; body: string },
+    ack: (response: AckResponse<Message>) => void,
+  ) => void;
+  'message:react': (
+    payload: { messageId: string; emoji: ReactionEmoji },
     ack: (response: AckResponse<Message>) => void,
   ) => void;
   typing: (payload: { conversationId: string; isTyping: boolean }) => void;

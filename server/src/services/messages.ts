@@ -1,27 +1,98 @@
 import { Types } from 'mongoose';
 import { Conversation } from '../models/Conversation.js';
-import { Message } from '../models/Message.js';
+import { Message, type ReactionEmoji } from '../models/Message.js';
 import { emitToConversation } from '../socket/emitter.js';
 import type { AuthUser, MessageDTO } from '../types/dto.js';
-import { notFound } from '../utils/httpError.js';
+import { badRequest, forbidden, notFound } from '../utils/httpError.js';
 import { isObjectId } from '../utils/validation.js';
 import { findAccessibleConversation } from './conversations.js';
-import { type MessageLike, toMessageDTO } from './mappers.js';
+import { MESSAGE_POPULATE, type MessageLike, toMessageDTO } from './mappers.js';
+
+type PopulatedFields = Pick<MessageLike, 'sender' | 'replyTo' | 'reactions'>;
+
+/** Loads a message as the DTO clients receive (sender, reply preview and reactions resolved). */
+async function messageDTO(id: Types.ObjectId | string): Promise<MessageDTO> {
+  const message = await Message.findById(id).populate<PopulatedFields>(MESSAGE_POPULATE).lean();
+  if (!message) throw notFound('Message not found');
+  return toMessageDTO(message);
+}
+
+/** A message the user can see (its conversation is accessible), or 404. */
+async function findAccessibleMessage(messageId: string, user: AuthUser) {
+  if (!isObjectId(messageId)) throw notFound('Message not found');
+  const message = await Message.findById(messageId);
+  if (!message) throw notFound('Message not found');
+  await findAccessibleConversation(message.conversation.toString(), user);
+  return message;
+}
 
 /**
  * Persists a message and broadcasts it to everyone in the conversation.
  * Shared by the REST endpoint and the Socket.IO "message:send" handler.
  */
-export async function sendMessage(conversationId: string, sender: AuthUser, body: string): Promise<MessageDTO> {
+export async function sendMessage(
+  conversationId: string,
+  sender: AuthUser,
+  body: string,
+  replyToId?: string,
+): Promise<MessageDTO> {
   const conversation = await findAccessibleConversation(conversationId, sender);
-  const message = await Message.create({ conversation: conversation._id, sender: sender.id, body });
+
+  if (replyToId) {
+    const target = isObjectId(replyToId) && (await Message.exists({ _id: replyToId, conversation: conversation._id }));
+    if (!target) throw badRequest('The message you replied to no longer exists');
+  }
+
+  const message = await Message.create({
+    conversation: conversation._id,
+    sender: sender.id,
+    body,
+    replyTo: replyToId ?? null,
+  });
   await Conversation.updateOne({ _id: conversation._id }, { $set: { lastMessageAt: message.createdAt } });
 
-  const dto = toMessageDTO({
-    ...message.toObject(),
-    sender: { _id: new Types.ObjectId(sender.id), username: sender.username, role: sender.role },
-  });
+  const dto = await messageDTO(message._id);
   emitToConversation(conversationId, 'message:new', dto);
+  return dto;
+}
+
+/** Senders can change the text of their own messages; everyone sees the update live. */
+export async function editMessage(messageId: string, user: AuthUser, body: string): Promise<MessageDTO> {
+  const message = await findAccessibleMessage(messageId, user);
+  if (!message.sender.equals(user.id)) throw forbidden('You can only edit your own messages');
+  if (message.deletedAt) throw badRequest('This message was removed');
+
+  if (message.body !== body) {
+    message.body = body;
+    message.editedAt = new Date();
+    await message.save();
+  }
+
+  const dto = await messageDTO(message._id);
+  emitToConversation(dto.conversationId, 'message:updated', dto);
+  return dto;
+}
+
+/** Adds the user's reaction, or removes it if they already reacted with that emoji. */
+export async function toggleReaction(messageId: string, user: AuthUser, emoji: ReactionEmoji): Promise<MessageDTO> {
+  const message = await findAccessibleMessage(messageId, user);
+  if (message.deletedAt) throw badRequest("You can't react to a removed message");
+
+  const reaction = { emoji, user: new Types.ObjectId(user.id) };
+  // Two conditional updates keep the toggle atomic without reading the array first.
+  const removed = await Message.updateOne(
+    { _id: message._id, reactions: { $elemMatch: reaction } },
+    { $pull: { reactions: reaction } },
+  );
+  if (removed.modifiedCount === 0) {
+    await Message.updateOne(
+      { _id: message._id, reactions: { $not: { $elemMatch: reaction } } },
+      { $push: { reactions: reaction } },
+    );
+  }
+
+  const dto = await messageDTO(message._id);
+  emitToConversation(dto.conversationId, 'message:updated', dto);
   return dto;
 }
 
@@ -37,7 +108,7 @@ export async function listMessages(
   const docs = await Message.find(filter)
     .sort({ _id: -1 })
     .limit(options.limit + 1)
-    .populate<{ sender: MessageLike['sender'] }>('sender', 'username role')
+    .populate<PopulatedFields>(MESSAGE_POPULATE)
     .lean();
 
   const hasMore = docs.length > options.limit;
@@ -50,7 +121,7 @@ export async function removeMessage(messageId: string): Promise<void> {
   if (!isObjectId(messageId)) throw notFound('Message not found');
   const message = await Message.findOneAndUpdate(
     { _id: messageId, deletedAt: null },
-    { $set: { deletedAt: new Date(), body: '' } },
+    { $set: { deletedAt: new Date(), body: '', reactions: [] } },
   );
   if (!message) throw notFound('Message not found');
   emitToConversation(message.conversation.toString(), 'message:deleted', {

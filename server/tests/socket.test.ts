@@ -94,6 +94,28 @@ describe('Socket.IO', () => {
     expect(await received).toMatchObject({ conversationId: room, body: 'hello bob' });
   });
 
+  it('broadcasts edits and reactions as message:updated', async () => {
+    const room = await createRoom('general');
+    const alice = await connectAs('alice');
+    const bob = await connectAs('bob');
+
+    const sent = await alice.socket.emitWithAck('message:send', { conversationId: room, body: 'first draft' });
+    if (!sent.ok) throw new Error(sent.error);
+
+    const edited = next(bob.socket, 'message:updated');
+    await alice.socket.emitWithAck('message:edit', { messageId: sent.data.id, body: 'final version' });
+    expect(await edited).toMatchObject({ id: sent.data.id, body: 'final version', editedAt: expect.any(String) });
+
+    const reacted = next(alice.socket, 'message:updated');
+    const ack = await bob.socket.emitWithAck('message:react', { messageId: sent.data.id, emoji: '🎉' });
+    expect(ack.ok).toBe(true);
+    expect((await reacted).reactions).toEqual([{ emoji: '🎉', users: [{ id: bob.user.id, username: 'bob' }] }]);
+
+    const reply = next(alice.socket, 'message:new');
+    await bob.socket.emitWithAck('message:send', { conversationId: room, body: 'nice', replyToId: sent.data.id });
+    expect((await reply).replyTo).toMatchObject({ id: sent.data.id, body: 'final version' });
+  });
+
   it('acknowledges invalid messages with an error', async () => {
     const room = await createRoom('general');
     const alice = await connectAs('alice');

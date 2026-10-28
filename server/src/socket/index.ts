@@ -6,15 +6,21 @@ import { env } from '../config/env.js';
 import { createSocketLimiter } from '../middleware/rateLimit.js';
 import { User } from '../models/User.js';
 import { accessibleConversationIds } from '../services/conversations.js';
-import { sendMessage } from '../services/messages.js';
+import { editMessage, sendMessage, toggleReaction } from '../services/messages.js';
 import { markRead } from '../services/reads.js';
 import { ACCESS_COOKIE, verifyAccessToken } from '../services/tokens.js';
-import { errorMessage, messageBodySchema, objectIdSchema } from '../utils/validation.js';
+import { errorMessage, messageBodySchema, objectIdSchema, reactionSchema } from '../utils/validation.js';
 import { type ChatServer, attachIO } from './emitter.js';
 import { conversationRoom, userRoom } from './events.js';
 import { addConnection, removeConnection } from './presence.js';
 
-const sendSchema = z.object({ conversationId: objectIdSchema, body: messageBodySchema });
+const sendSchema = z.object({
+  conversationId: objectIdSchema,
+  body: messageBodySchema,
+  replyToId: objectIdSchema.optional(),
+});
+const editSchema = z.object({ messageId: objectIdSchema, body: messageBodySchema });
+const reactSchema = z.object({ messageId: objectIdSchema, emoji: reactionSchema });
 const typingSchema = z.object({ conversationId: objectIdSchema, isTyping: z.boolean() });
 const readSchema = z.object({ conversationId: objectIdSchema });
 
@@ -48,6 +54,7 @@ export function createSocketServer(httpServer: HttpServer): ChatServer {
   io.on('connection', (socket) => {
     const { user } = socket.data;
     const allowMessage = createSocketLimiter(20, 10_000);
+    const allowReaction = createSocketLimiter(30, 10_000);
 
     void socket.join([userRoom(user.id), ...socket.data.conversationIds.map(conversationRoom)]);
 
@@ -62,8 +69,36 @@ export function createSocketServer(httpServer: HttpServer): ChatServer {
           ack({ ok: false, error: 'You are sending messages too quickly – slow down a little' });
           return;
         }
-        const { conversationId, body } = sendSchema.parse(payload);
-        ack({ ok: true, data: await sendMessage(conversationId, user, body) });
+        const { conversationId, body, replyToId } = sendSchema.parse(payload);
+        ack({ ok: true, data: await sendMessage(conversationId, user, body, replyToId) });
+      } catch (error) {
+        ack({ ok: false, error: errorMessage(error) });
+      }
+    });
+
+    socket.on('message:edit', async (payload, ack) => {
+      if (typeof ack !== 'function') return;
+      try {
+        if (!allowMessage()) {
+          ack({ ok: false, error: 'You are editing too quickly – slow down a little' });
+          return;
+        }
+        const { messageId, body } = editSchema.parse(payload);
+        ack({ ok: true, data: await editMessage(messageId, user, body) });
+      } catch (error) {
+        ack({ ok: false, error: errorMessage(error) });
+      }
+    });
+
+    socket.on('message:react', async (payload, ack) => {
+      if (typeof ack !== 'function') return;
+      try {
+        if (!allowReaction()) {
+          ack({ ok: false, error: 'You are reacting too quickly – slow down a little' });
+          return;
+        }
+        const { messageId, emoji } = reactSchema.parse(payload);
+        ack({ ok: true, data: await toggleReaction(messageId, user, emoji) });
       } catch (error) {
         ack({ ok: false, error: errorMessage(error) });
       }

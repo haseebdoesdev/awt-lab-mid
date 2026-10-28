@@ -23,6 +23,8 @@ role-based administration and a one-command Docker deployment.
 - Typing indicators ("alice is typing…") and live online / last-seen presence
 - Unread counters per conversation, in the browser tab title and on the app icon
 - Read receipts: "Seen" in DMs and "Seen by alice, bob" in rooms
+- Emoji reactions (👍 ❤️ 😂 😮 😢 🎉), editing your own messages (marked "edited") and replies that quote
+  the original – click the quote to jump to it. All of it updates live for everyone.
 - Infinite scroll through history (cursor pagination), date dividers, message grouping and clickable links
 - Desktop notifications for messages in background conversations
 - Light / dark / system theme and a responsive layout down to phone size
@@ -207,9 +209,11 @@ All routes are under `/api`. Errors use the shape `{ "error": string, "details"?
 | DELETE | `/conversations/:id` | admin | Delete a room and its history |
 | POST | `/conversations/dm` | user | Open (or create) the DM with `userId` |
 | GET | `/conversations/:id/messages?before=&limit=` | participant | Cursor-paginated history |
-| POST | `/conversations/:id/messages` | participant | Send a message (REST alternative to the socket) |
+| POST | `/conversations/:id/messages` | participant | Send a message (`body`, optional `replyToId`) |
 | POST | `/conversations/:id/read` | participant | Mark as read |
 | GET | `/conversations/:id/receipts` | participant | Read receipts |
+| PATCH | `/messages/:id` | sender | Edit your message's text |
+| POST | `/messages/:id/reactions` | participant | Toggle a reaction (`emoji`) |
 | DELETE | `/messages/:id` | admin | Remove a message |
 | GET | `/admin/stats` | admin | Usage statistics |
 | GET | `/admin/users` | admin | All accounts |
@@ -223,10 +227,13 @@ The handshake is authenticated with the access-token cookie. On connect, each so
 
 | Direction | Event | Payload |
 | --- | --- | --- |
-| client → server | `message:send` (ack) | `{ conversationId, body }` → `{ ok, data: Message }` |
+| client → server | `message:send` (ack) | `{ conversationId, body, replyToId? }` → `{ ok, data: Message }` |
+| client → server | `message:edit` (ack) | `{ messageId, body }` → `{ ok, data: Message }` |
+| client → server | `message:react` (ack) | `{ messageId, emoji }` → toggles your reaction |
 | client → server | `typing` | `{ conversationId, isTyping }` |
 | client → server | `conversation:read` (ack) | `{ conversationId }` |
 | server → client | `message:new` | `Message` |
+| server → client | `message:updated` | `Message` (edited, or reactions changed) |
 | server → client | `message:deleted` | `{ conversationId, messageId }` |
 | server → client | `typing` | `{ conversationId, user, isTyping }` |
 | server → client | `presence` | `{ userId, online, lastSeen }` |
@@ -240,7 +247,7 @@ The handshake is authenticated with the access-token cookie. On connect, each so
 npm test
 ```
 
-44 backend tests run against an in-memory MongoDB and cover:
+57 backend tests run against an in-memory MongoDB and cover:
 
 - registration and login validation
 - refresh-token rotation and its grace period
@@ -250,6 +257,7 @@ npm test
 - DM privacy and de-duplication
 - cursor pagination
 - unread counts and read receipts
+- replies, editing permissions, reaction toggling (and messages stored before those features existed)
 - moderation, bans and role changes
 - the real-time layer, through actual Socket.IO clients: message delivery, acknowledgements, typing, presence,
   receipts, DM subscription and forced disconnect on ban

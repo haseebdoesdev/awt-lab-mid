@@ -1,10 +1,10 @@
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined';
 import { Box, Typography } from '@mui/material';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { useCurrentUser } from '../auth/AuthContext';
 import { conversationTitle, useChatActions, useChatState } from '../chat/ChatContext';
-import { sortConversations } from '../chat/chatReducer';
+import { type ClientMessage, sortConversations } from '../chat/chatReducer';
 import { ChatHeader } from '../components/ChatHeader';
 import { FullPageLoader } from '../components/FullPageLoader';
 import { MessageComposer, TypingIndicator } from '../components/MessageComposer';
@@ -31,6 +31,11 @@ export function ChatPage() {
   const { setActiveConversation, openConversation } = useChatActions();
   const conversation = conversationId ? conversations[conversationId] : undefined;
   const exists = conversation !== undefined;
+  const [replyingTo, setReplyingTo] = useState<ClientMessage | null>(null);
+  const cancelReply = useCallback(() => setReplyingTo(null), []);
+
+  // A reply belongs to one conversation.
+  useEffect(() => setReplyingTo(null), [conversationId]);
 
   useEffect(() => {
     setActiveConversation(conversationId ?? null);
@@ -63,11 +68,18 @@ export function ChatPage() {
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <ChatHeader conversation={conversation} />
       {/* Keyed per conversation so scroll position and drafts reset when switching. */}
-      <MessageList key={`list:${conversation.id}`} conversation={conversation} thread={threads[conversation.id]} />
+      <MessageList
+        key={`list:${conversation.id}`}
+        conversation={conversation}
+        thread={threads[conversation.id]}
+        onReply={setReplyingTo}
+      />
       <TypingIndicator names={typingNames} />
       <MessageComposer
         key={`composer:${conversation.id}`}
         conversationId={conversation.id}
+        replyingTo={replyingTo}
+        onCancelReply={cancelReply}
         placeholder={`Message ${conversation.type === 'room' ? title : `@${title}`}`}
       />
     </Box>

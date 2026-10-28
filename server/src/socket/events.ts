@@ -1,3 +1,4 @@
+import type { ReactionEmoji } from '../models/Message.js';
 import type { AuthUser, ConversationDTO, MessageDTO, ReadReceiptDTO } from '../types/dto.js';
 
 /**
@@ -21,6 +22,8 @@ export interface PresencePayload {
 
 export interface ServerToClientEvents {
   'message:new': (message: MessageDTO) => void;
+  /** An existing message was edited or its reactions changed. */
+  'message:updated': (message: MessageDTO) => void;
   'message:deleted': (payload: { conversationId: string; messageId: string }) => void;
   typing: (payload: TypingPayload) => void;
   presence: (payload: PresencePayload) => void;
@@ -31,7 +34,12 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  'message:send': (payload: { conversationId: string; body: string }, ack: Ack<MessageDTO>) => void;
+  'message:send': (
+    payload: { conversationId: string; body: string; replyToId?: string },
+    ack: Ack<MessageDTO>,
+  ) => void;
+  'message:edit': (payload: { messageId: string; body: string }, ack: Ack<MessageDTO>) => void;
+  'message:react': (payload: { messageId: string; emoji: ReactionEmoji }, ack: Ack<MessageDTO>) => void;
   typing: (payload: { conversationId: string; isTyping: boolean }) => void;
   'conversation:read': (payload: { conversationId: string }, ack?: Ack<ReadReceiptDTO>) => void;
 }

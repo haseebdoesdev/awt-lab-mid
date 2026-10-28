@@ -51,6 +51,7 @@ export type ChatAction =
   | { type: 'message/confirmed'; clientId: string; message: Message }
   | { type: 'message/failed'; conversationId: string; clientId: string; error: string }
   | { type: 'message/retrying'; conversationId: string; clientId: string }
+  | { type: 'message/updated'; message: Message }
   | { type: 'message/deleted'; conversationId: string; messageId: string }
   | { type: 'typing/set'; conversationId: string; userId: string; username: string; isTyping: boolean }
   | { type: 'presence/set'; userId: string; online: boolean; lastSeen: string | null }
@@ -229,9 +230,28 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ),
       }));
 
+    case 'message/updated': {
+      const { message } = action;
+      // Replace the message itself and refresh the quote in any reply to it.
+      const apply = (m: ClientMessage): ClientMessage => {
+        if (m.id === message.id) return { ...message, localKey: m.localKey };
+        if (m.replyTo?.id === message.id) return { ...m, replyTo: { ...m.replyTo, body: message.body } };
+        return m;
+      };
+      const next = updateThread(state, message.conversationId, (t) => ({ ...t, items: t.items.map(apply) }));
+      return updateConversation(next, message.conversationId, (c) => ({
+        ...c,
+        lastMessage: c.lastMessage?.id === message.id ? message : c.lastMessage,
+      }));
+    }
+
     case 'message/deleted': {
       const deletedAt = new Date().toISOString();
-      const remove = (m: Message): Message => (m.id === action.messageId ? { ...m, body: '', deletedAt } : m);
+      const remove = <M extends Message>(m: M): M => {
+        if (m.id === action.messageId) return { ...m, body: '', reactions: [], deletedAt };
+        if (m.replyTo?.id === action.messageId) return { ...m, replyTo: { ...m.replyTo, body: '', deletedAt } };
+        return m;
+      };
       const next = updateThread(state, action.conversationId, (t) => ({ ...t, items: t.items.map(remove) }));
       return updateConversation(next, action.conversationId, (c) => ({
         ...c,

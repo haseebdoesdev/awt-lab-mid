@@ -30,6 +30,8 @@ const roomSchema = z.object({
 
 const dmSchema = z.object({ userId: objectIdSchema });
 
+const sendSchema = z.object({ body: messageBodySchema, replyToId: objectIdSchema.optional() });
+
 const historySchema = z.object({
   before: objectIdSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(30),
@@ -81,8 +83,8 @@ router.get('/:id/messages', async (req, res) => {
 });
 
 router.post('/:id/messages', async (req, res) => {
-  const body = messageBodySchema.parse(req.body?.body);
-  const message = await sendMessage(req.params.id, currentUser(req), body);
+  const { body, replyToId } = sendSchema.parse(req.body);
+  const message = await sendMessage(req.params.id, currentUser(req), body, replyToId);
   res.status(201).json({ message });
 });
 

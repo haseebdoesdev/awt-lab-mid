@@ -6,10 +6,15 @@ import { User } from '../models/User.js';
 import type { AuthUser, ConversationDTO, MessageDTO } from '../types/dto.js';
 import { badRequest, notFound } from '../utils/httpError.js';
 import { isObjectId } from '../utils/validation.js';
-import { type ConversationLike, type MessageLike, toConversationDTO, toMessageDTO } from './mappers.js';
+import {
+  type ConversationLike,
+  MESSAGE_POPULATE,
+  type MessageLike,
+  toConversationDTO,
+  toMessageDTO,
+} from './mappers.js';
 
 const PARTICIPANT_FIELDS = 'username role lastSeen';
-const SENDER_FIELDS = 'username role';
 
 /** Loads a conversation the user may read and write in, or throws 404. */
 export async function findAccessibleConversation(id: string, user: AuthUser): Promise<ConversationDoc> {
@@ -51,7 +56,7 @@ export async function listConversations(user: AuthUser): Promise<ConversationDTO
     { $group: { _id: '$conversation', messageId: { $first: '$_id' } } },
   ]);
   const lastMessages = await Message.find({ _id: { $in: latest.map((l) => l.messageId) } })
-    .populate<{ sender: MessageLike['sender'] }>('sender', SENDER_FIELDS)
+    .populate<Pick<MessageLike, 'sender' | 'replyTo' | 'reactions'>>(MESSAGE_POPULATE)
     .lean();
   const lastMessageByConversation = new Map<string, MessageDTO>(
     lastMessages.map((m) => [m.conversation.toString(), toMessageDTO(m)]),

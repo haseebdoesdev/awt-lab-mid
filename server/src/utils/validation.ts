@@ -1,5 +1,5 @@
 import { z, ZodError } from 'zod';
-import { MAX_MESSAGE_LENGTH } from '../models/Message.js';
+import { MAX_MESSAGE_LENGTH, REACTION_EMOJIS } from '../models/Message.js';
 import { HttpError } from './httpError.js';
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -14,6 +14,8 @@ export const messageBodySchema = z
   .trim()
   .min(1, 'Message cannot be empty')
   .max(MAX_MESSAGE_LENGTH, `Messages are limited to ${MAX_MESSAGE_LENGTH} characters`);
+
+export const reactionSchema = z.enum(REACTION_EMOJIS, { error: 'Unsupported reaction' });
 
 /** Human readable message for errors surfaced over Socket.IO acknowledgements. */
 export function errorMessage(error: unknown): string {
